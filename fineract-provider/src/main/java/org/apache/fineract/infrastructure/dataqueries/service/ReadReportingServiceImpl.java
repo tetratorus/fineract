@@ -91,6 +91,9 @@ public class ReadReportingServiceImpl implements ReadReportingService {
     /** A plain integer with no leading zeros, so identifiers like {@code 000123} stay strings. */
     private static final Pattern UNTYPED_INTEGER = Pattern.compile("-?(0|[1-9]\\d*)");
 
+    private static final Pattern DISPLAY_LITERAL_NUMBER = Pattern.compile("^-?\\d+(\\.\\d+)?$");
+    private static final Pattern DISPLAY_LITERAL_DATE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
+
     private final JdbcTemplate jdbcTemplate;
     private final PlatformSecurityContext context;
     private final GenericDataService genericDataService;
@@ -254,13 +257,18 @@ public class ReadReportingServiceImpl implements ReadReportingService {
             String formatType = paramFormatTypes.get(paramName);
             String displayPattern = "'\\$\\{" + Pattern.quote(paramName) + "\\}'(\\s+AS\\s+)";
             if (sql.matches("(?s).*" + displayPattern + ".*")) {
-                if (formatType == null || (!formatType.equalsIgnoreCase("number") && !formatType.equalsIgnoreCase("integer")
-                        && !formatType.equalsIgnoreCase("date"))) {
+                final Pattern allowedLiteral = displayLiteralPattern(formatType);
+                if (allowedLiteral == null) {
                     throw new InputValidationException("Parameter '%s' of type '%s' cannot be used in display-literal position"
                             .formatted(paramName, formatType != null ? formatType : "unregistered"));
                 }
+                final String value = entry.getValue();
+                if (value == null || !allowedLiteral.matcher(value).matches()) {
+                    throw new InputValidationException(
+                            "Parameter '%s' of type '%s' has an invalid value for display-literal position".formatted(paramName, formatType));
+                }
                 // Substitute as string literal — preserves varchar return type
-                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(entry.getValue()) + "'$1");
+                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(value) + "'$1");
             }
         }
 
@@ -280,6 +288,19 @@ public class ReadReportingServiceImpl implements ReadReportingService {
         }
 
         return buildPreparedQuery(name, normalisedParams, sql, paramFormatTypes);
+    }
+
+    private static Pattern displayLiteralPattern(final String formatType) {
+        if (formatType == null) {
+            return null;
+        }
+        if (formatType.equalsIgnoreCase("number") || formatType.equalsIgnoreCase("integer")) {
+            return DISPLAY_LITERAL_NUMBER;
+        }
+        if (formatType.equalsIgnoreCase("date")) {
+            return DISPLAY_LITERAL_DATE;
+        }
+        return null;
     }
 
     private String getSql(final String name, final String type) {
