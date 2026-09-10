@@ -34,11 +34,14 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.domain.TenantOidcConfig;
 import org.apache.fineract.infrastructure.core.exception.ResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.data.TenantOidcConfigData;
 import org.apache.fineract.infrastructure.security.domain.OidcFederationType;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.TenantOidcConfigService;
 import org.springframework.stereotype.Component;
@@ -47,8 +50,9 @@ import org.springframework.stereotype.Component;
  * REST resource for managing per-tenant OIDC/IdP configurations.
  *
  * <p>
- * All endpoints require the {@code MANAGE_TENANT_OIDC_CONFIG} permission (Super Admin only). The {@code clientSecret}
- * is accepted on write operations but is never returned in responses.
+ * All endpoints require the {@code MANAGE_TENANT_OIDC_CONFIG} permission (Super Admin only) and the path
+ * {@code tenantId} must match the tenant of the authenticated caller. The {@code clientSecret} is accepted on write
+ * operations but is never returned in responses.
  */
 @Path("/v1/tenants/{tenantId}/oidc-config")
 @Component
@@ -69,7 +73,7 @@ public class TenantOidcConfigApiResource {
     @Operation(summary = "Retrieve OIDC configuration for a tenant", description = "Returns the current OIDC/IdP configuration for the given tenant. "
             + "The clientSecret is never included in the response.")
     public String retrieve(@Parameter(description = "tenantId") @PathParam("tenantId") String tenantId) {
-        context.authenticatedUser().validateHasPermissionTo(PERMISSION);
+        authorize(tenantId);
 
         TenantOidcConfig config = tenantOidcConfigService.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("tenantOidcConfig.not.found",
@@ -85,7 +89,7 @@ public class TenantOidcConfigApiResource {
             + "The clientSecret is encrypted at rest and never returned in responses. "
             + "The issuerUri must be globally unique across all tenants.")
     public String create(@Parameter(description = "tenantId") @PathParam("tenantId") String tenantId, String requestBody) {
-        context.authenticatedUser().validateHasPermissionTo(PERMISSION);
+        authorize(tenantId);
 
         TenantOidcConfig config = parseRequest(tenantId, requestBody, null);
         TenantOidcConfig saved = tenantOidcConfigService.save(config);
@@ -98,7 +102,7 @@ public class TenantOidcConfigApiResource {
     @Operation(summary = "Update OIDC configuration for a tenant", description = "Updates the existing OIDC/IdP configuration for the given tenant. "
             + "If clientSecret is omitted in the request body, the existing encrypted secret is preserved.")
     public String update(@Parameter(description = "tenantId") @PathParam("tenantId") String tenantId, String requestBody) {
-        context.authenticatedUser().validateHasPermissionTo(PERMISSION);
+        authorize(tenantId);
 
         TenantOidcConfig existing = tenantOidcConfigService.findByTenantId(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("tenantOidcConfig.not.found",
@@ -114,13 +118,23 @@ public class TenantOidcConfigApiResource {
     @Operation(summary = "Delete OIDC configuration for a tenant", description = "Removes the OIDC/IdP configuration for the given tenant. "
             + "After deletion, authentication via this tenant's IdP will no longer work.")
     public String delete(@Parameter(description = "tenantId") @PathParam("tenantId") String tenantId) {
-        context.authenticatedUser().validateHasPermissionTo(PERMISSION);
+        authorize(tenantId);
 
         tenantOidcConfigService.findByTenantId(tenantId).orElseThrow(() -> new ResourceNotFoundException("tenantOidcConfig.not.found",
                 "No OIDC configuration found for tenant: " + tenantId, new Object[] { tenantId }));
 
         tenantOidcConfigService.deleteByTenantId(tenantId);
         return "{}";
+    }
+
+    private void authorize(String tenantId) {
+        context.authenticatedUser().validateHasPermissionTo(PERMISSION);
+
+        FineractPlatformTenant currentTenant = ThreadLocalContextUtil.getTenant();
+        if (currentTenant == null || currentTenant.getTenantIdentifier() == null
+                || !currentTenant.getTenantIdentifier().equals(tenantId)) {
+            throw new NoAuthorizationException("User is not authorized to manage OIDC configuration of tenant: " + tenantId);
+        }
     }
 
     private TenantOidcConfig parseRequest(String tenantId, String body, TenantOidcConfig existing) {
