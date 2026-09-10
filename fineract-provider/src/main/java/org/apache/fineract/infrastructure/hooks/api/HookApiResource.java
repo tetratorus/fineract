@@ -54,6 +54,7 @@ import org.apache.fineract.infrastructure.hooks.data.HookDetailsData;
 import org.apache.fineract.infrastructure.hooks.data.HookUpdateRequest;
 import org.apache.fineract.infrastructure.hooks.data.HookUpdateResponse;
 import org.apache.fineract.infrastructure.hooks.service.HookReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/hooks")
@@ -64,6 +65,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HookApiResource {
 
+    private static final String RESOURCE_NAME_FOR_PERMISSIONS = "HOOK";
+
+    private final PlatformSecurityContext context;
     private final HookReadPlatformService readPlatformService;
     private final CommandDispatcher dispatcher;
 
@@ -71,6 +75,7 @@ public class HookApiResource {
     @Operation(summary = "Retrieve Hooks", operationId = "retrieveAllHooks", description = "Returns the list of hooks")
     @AlternativeOperationId("retrieveHooks")
     public Collection<HookData> retrieveHooks(@Context final UriInfo uriInfo) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         return readPlatformService.retrieveAllHooks();
     }
 
@@ -80,6 +85,7 @@ public class HookApiResource {
     @AlternativeOperationId("retrieveHook")
     public HookData retrieveHook(@PathParam("hookId") @Parameter(description = "hookId") final Long hookId,
             @QueryParam("template") @DefaultValue("false") @Parameter(description = "template") Boolean template) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         var hook = readPlatformService.retrieveHook(hookId);
 
         if (Boolean.TRUE.equals(template)) {
@@ -97,12 +103,14 @@ public class HookApiResource {
     @Operation(summary = "Retrieve Hooks Template", operationId = "retrieveTemplateHook", description = "This is a convenience resource. It can be useful when building maintenance user interface screens for client applications.")
     @AlternativeOperationId("template_3")
     public HookDetailsData template() {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         return readPlatformService.retrieveNewHookDetails(null);
     }
 
     @POST
     @Operation(summary = "Create a Hook", operationId = "createHook", description = "")
     public HookCreateResponse createHook(@Valid final HookCreateRequest request) {
+        context.authenticatedUser().validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final var command = new HookCreateCommand();
         command.setPayload(request);
 
@@ -116,6 +124,7 @@ public class HookApiResource {
     @Operation(summary = "Update a Hook", operationId = "updateHook", description = "Updates the details of a hook.")
     public HookUpdateResponse updateHook(@PathParam("hookId") @Parameter(description = "hookId") final Long hookId,
             @Valid HookUpdateRequest request) {
+        context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
         requireNonNull(hookId, "hookId is required");
 
         request.setId(hookId);
@@ -132,6 +141,7 @@ public class HookApiResource {
     @Path("{hookId}")
     @Operation(summary = "Delete a Hook", operationId = "deleteHook", description = "Deletes a hook.")
     public HookDeleteResponse deleteHook(@PathParam("hookId") @Parameter(description = "hookId") final Long hookId) {
+        context.authenticatedUser().validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
         var request = HookDeleteRequest.builder().id(hookId).build();
 
         final var command = new HookDeleteCommand();
