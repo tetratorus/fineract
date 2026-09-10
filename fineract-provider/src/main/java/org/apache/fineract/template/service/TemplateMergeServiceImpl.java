@@ -28,8 +28,11 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.net.Authenticator;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.PasswordAuthentication;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
@@ -87,11 +90,12 @@ public class TemplateMergeServiceImpl implements TemplateMergeService {
 
                 mappersMustache.execute(stringWriter, scopes);
                 String url = stringWriter.toString();
-                if (!url.startsWith("http")) {
-                    url = scopes.get("BASE_URI") + url;
+                final String baseUri = String.valueOf(scopes.get("BASE_URI"));
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                    url = baseUri + url;
                 }
                 try {
-                    scopes.put(entry.getKey(), getMapFromUrl(url));
+                    scopes.put(entry.getKey(), getMapFromUrl(url, baseUri));
                 } catch (final IOException e) {
                     log.error("getCompiledMapFromMappers() failed", e);
                 }
@@ -110,8 +114,11 @@ public class TemplateMergeServiceImpl implements TemplateMergeService {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> getMapFromUrl(final String url) throws IOException {
-        final HttpURLConnection connection = getConnection(url);
+    private Map<String, Object> getMapFromUrl(final String url, final String baseUri) throws IOException {
+        final HttpURLConnection connection = getConnection(url, baseUri);
+        if (connection == null) {
+            throw new IOException("Unable to open connection to template mapper url");
+        }
 
         final String response = getStringFromInputStream(connection.getInputStream());
         HashMap<String, Object> result = new HashMap<>();
@@ -132,48 +139,40 @@ public class TemplateMergeServiceImpl implements TemplateMergeService {
         }
     }
 
-    private HttpURLConnection getConnection(final String url) {
-        if (fineractProperties.getTemplate() != null && fineractProperties.getTemplate().isRegexWhitelistEnabled()) {
-            boolean whitelisted = false;
+    private HttpURLConnection getConnection(final String url, final String baseUri) {
+        final URI target = parseHttpUri(url);
+        final boolean sameOrigin = isSameOrigin(target, baseUri);
 
-            if (fineractProperties.getTemplate().getRegexWhitelist() != null
-                    && !fineractProperties.getTemplate().getRegexWhitelist().isEmpty()) {
-                for (String urlPattern : fineractProperties.getTemplate().getRegexWhitelist()) {
-                    Pattern pattern = Pattern.compile(urlPattern);
-                    Matcher matcher = pattern.matcher(url);
-                    if (matcher.matches()) {
-                        whitelisted = true;
-                        break;
-                    }
-                }
+        if (!sameOrigin) {
+            if (!isWhitelisted(url)) {
+                throw new TemplateForbiddenException(url);
             }
-
-            if (!whitelisted) {
+            if (resolvesToRestrictedAddress(target.getHost())) {
                 throw new TemplateForbiddenException(url);
             }
         }
 
-        String authToken = ThreadLocalContextUtil.getAuthToken();
-        if (authToken == null) {
-            final String name = SecurityContextHolder.getContext().getAuthentication().getName();
-            final String password = SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
-
-            Authenticator.setDefault(new Authenticator() {
-
-                @Override
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(name, password.toCharArray());
-                }
-            });
-        }
-
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
-            if (authToken != null) {
-                connection.setRequestProperty("Authorization", "Basic " + authToken);// NOSONAR
+            connection = (HttpURLConnection) target.toURL().openConnection();
+            connection.setInstanceFollowRedirects(false);
+            if (sameOrigin) {
+                final String authToken = ThreadLocalContextUtil.getAuthToken();
+                if (authToken != null) {
+                    connection.setRequestProperty("Authorization", "Basic " + authToken);// NOSONAR
+                } else {
+                    final String name = SecurityContextHolder.getContext().getAuthentication().getName();
+                    final String password = SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
+                    connection.setAuthenticator(new Authenticator() {
+
+                        @Override
+                        protected PasswordAuthentication getPasswordAuthentication() {
+                            return new PasswordAuthentication(name, password.toCharArray());
+                        }
+                    });
+                }
+                TrustModifier.relaxHostChecking(connection);
             }
-            TrustModifier.relaxHostChecking(connection);
 
             connection.setDoInput(true);
 
@@ -182,6 +181,89 @@ public class TemplateMergeServiceImpl implements TemplateMergeService {
         }
 
         return connection;
+    }
+
+    private static URI parseHttpUri(final String url) {
+        final URI uri;
+        try {
+            uri = new URI(url);
+        } catch (URISyntaxException e) {
+            throw new TemplateForbiddenException(url);
+        }
+        final String scheme = uri.getScheme();
+        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https")) || uri.getHost() == null
+                || uri.getRawUserInfo() != null) {
+            throw new TemplateForbiddenException(url);
+        }
+        return uri;
+    }
+
+    private static boolean isSameOrigin(final URI target, final String baseUri) {
+        if (baseUri == null) {
+            return false;
+        }
+        final URI base;
+        try {
+            base = new URI(baseUri);
+        } catch (URISyntaxException e) {
+            return false;
+        }
+        if (base.getScheme() == null || base.getHost() == null) {
+            return false;
+        }
+        return base.getScheme().equalsIgnoreCase(target.getScheme()) && base.getHost().equalsIgnoreCase(target.getHost())
+                && effectivePort(base) == effectivePort(target);
+    }
+
+    private static int effectivePort(final URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private boolean isWhitelisted(final String url) {
+        if (fineractProperties.getTemplate() == null || fineractProperties.getTemplate().getRegexWhitelist() == null) {
+            return false;
+        }
+        for (String urlPattern : fineractProperties.getTemplate().getRegexWhitelist()) {
+            if (urlPattern == null || urlPattern.isBlank()) {
+                continue;
+            }
+            Pattern pattern = Pattern.compile(urlPattern);
+            Matcher matcher = pattern.matcher(url);
+            if (matcher.matches()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean resolvesToRestrictedAddress(final String host) {
+        final InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(host);
+        } catch (UnknownHostException e) {
+            return true;
+        }
+        for (InetAddress address : addresses) {
+            if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress() || address.isMulticastAddress() || isUniqueLocalIpv6(address)
+                    || isCarrierGradeNat(address)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isUniqueLocalIpv6(final InetAddress address) {
+        final byte[] bytes = address.getAddress();
+        return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
+    }
+
+    private static boolean isCarrierGradeNat(final InetAddress address) {
+        final byte[] bytes = address.getAddress();
+        return bytes.length == 4 && (bytes[0] & 0xff) == 100 && (bytes[1] & 0xc0) == 64;
     }
 
     @SuppressWarnings("unchecked")
