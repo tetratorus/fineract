@@ -226,8 +226,7 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
             EntityTables entityTable = datatableUtil.resolveEntity(entityName);
             final boolean isConstraintApproach = this.configurationDomainService.isConstraintApproachEnabledForDatatables();
             final String fkColumnName = datatableUtil.getFKField(entityTable);
-            final String dataTableNameAlias = datatableName.toLowerCase().replaceAll("\\s", "_");
-            final String fkName = dataTableNameAlias + "_" + fkColumnName;
+            final String dataTableNameAlias = DatatableUtil.getDatatableAlias(datatableName);
             StringBuilder sqlBuilder = new StringBuilder();
             sqlBuilder.append("CREATE TABLE ").append(sqlGenerator.escape(datatableName)).append(" (");
 
@@ -257,7 +256,7 @@ public class DatatableWriteServiceImpl implements DatatableWriteService {
             // Remove trailing comma and space
             sqlBuilder.delete(sqlBuilder.length() - 2, sqlBuilder.length());
 
-            String fullFkName = "fk_" + fkName;
+            String fullFkName = DatatableUtil.getForeignKeyConstraintName(datatableName, fkColumnName);
             if (multiRow) {
                 sqlBuilder.append(", PRIMARY KEY (").append(TABLE_FIELD_ID).append(")");
                 if (databaseTypeResolver.isMySQL()) {
