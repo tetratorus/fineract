@@ -75,6 +75,7 @@ class DatatableRejectionCleanupServiceTest {
     void dropsTableCreatedByTheRejectedCommand() {
         registeredDatatableCount(DATATABLE_NAME, 0);
         datatableForeignKeyCount(DATATABLE_NAME, 1);
+        datatableColumnCount(DATATABLE_NAME, 3);
 
         underTest.cleanup(rejectedCreateDatatable(DATATABLE_NAME));
 
@@ -85,6 +86,7 @@ class DatatableRejectionCleanupServiceTest {
     void keepsTableThatWasNotCreatedByTheRejectedCommand() {
         registeredDatatableCount(CORE_TABLE_NAME, 0);
         datatableForeignKeyCount(CORE_TABLE_NAME, 0);
+        datatableColumnCount(CORE_TABLE_NAME, 3);
 
         underTest.cleanup(rejectedCreateDatatable(CORE_TABLE_NAME));
 
@@ -95,6 +97,7 @@ class DatatableRejectionCleanupServiceTest {
     void keepsRegisteredDatatable() {
         registeredDatatableCount(DATATABLE_NAME, 1);
         datatableForeignKeyCount(DATATABLE_NAME, 1);
+        datatableColumnCount(DATATABLE_NAME, 3);
 
         underTest.cleanup(rejectedCreateDatatable(DATATABLE_NAME));
 
@@ -112,6 +115,29 @@ class DatatableRejectionCleanupServiceTest {
         verify(jdbcTemplate, never()).execute(anyString());
     }
 
+    @Test
+    void keepsTableWithoutTheDatatableAuditColumns() {
+        registeredDatatableCount(CORE_TABLE_NAME, 0);
+        datatableForeignKeyCount(CORE_TABLE_NAME, 1);
+        datatableColumnCount(CORE_TABLE_NAME, 1);
+
+        underTest.cleanup(rejectedCreateDatatable(CORE_TABLE_NAME));
+
+        verify(jdbcTemplate, never()).execute(anyString());
+    }
+
+    @Test
+    void keepsTableWhenCommandJsonCannotBeRead() {
+        CommandSource commandSource = new CommandSource();
+        commandSource.setActionName("CREATE");
+        commandSource.setEntityName("DATATABLE");
+        commandSource.setCommandAsJson("{\"datatableName\":");
+
+        underTest.cleanup(commandSource);
+
+        verify(jdbcTemplate, never()).execute(anyString());
+    }
+
     private void registeredDatatableCount(String datatableName, Integer count) {
         when(jdbcTemplate.queryForObject(contains("x_registered_table"), eq(Integer.class), eq(datatableName))).thenReturn(count);
     }
@@ -119,6 +145,11 @@ class DatatableRejectionCleanupServiceTest {
     private void datatableForeignKeyCount(String datatableName, Integer count) {
         when(jdbcTemplate.queryForObject(contains("TABLE_CONSTRAINTS"), eq(Integer.class), eq(datatableName),
                 eq("fk_" + datatableName + "_loan_id"))).thenReturn(count);
+    }
+
+    private void datatableColumnCount(String datatableName, Integer count) {
+        when(jdbcTemplate.queryForObject(contains("information_schema.COLUMNS"), eq(Integer.class), eq(datatableName), eq("loan_id"),
+                eq("created_at"), eq("updated_at"))).thenReturn(count);
     }
 
     private CommandSource rejectedCreateDatatable(String datatableName) {

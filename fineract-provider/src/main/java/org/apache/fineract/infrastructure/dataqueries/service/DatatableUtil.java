@@ -75,6 +75,14 @@ public class DatatableUtil {
         return entityTable.getForeignKeyColumnNameOnDatatable();
     }
 
+    public static String getDatatableAlias(final String datatableName) {
+        return datatableName.toLowerCase().replaceAll("\\s", "_");
+    }
+
+    public static String getForeignKeyConstraintName(final String datatableName, final String fkColumnName) {
+        return "fk_" + getDatatableAlias(datatableName) + "_" + fkColumnName;
+    }
+
     public String validateDatatableRegistered(String datatable) {
         validateDatatableName(datatable);
         if (!isRegisteredDataTable(datatable)) {

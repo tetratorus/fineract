@@ -20,10 +20,12 @@ package org.apache.fineract.infrastructure.dataqueries.service;
 
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_APPTABLE_NAME;
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_DATATABLE_NAME;
+import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.CREATEDAT_FIELD_NAME;
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.TABLE_REGISTERED_TABLE;
+import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.UPDATEDAT_FIELD_NAME;
 
 import com.google.gson.JsonElement;
-import java.util.Locale;
+import com.google.gson.JsonParseException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.commands.domain.CommandSource;
@@ -56,9 +58,16 @@ public class DatatableRejectionCleanupService implements CleanupService {
             return;
         }
 
-        final JsonElement element = fromJsonHelper.parse(commandSource.getCommandAsJson());
-        final String datatableName = fromJsonHelper.extractStringNamed(API_PARAM_DATATABLE_NAME, element);
-        final String entityName = fromJsonHelper.extractStringNamed(API_PARAM_APPTABLE_NAME, element);
+        final String datatableName;
+        final String entityName;
+        try {
+            final JsonElement element = fromJsonHelper.parse(commandSource.getCommandAsJson());
+            datatableName = fromJsonHelper.extractStringNamed(API_PARAM_DATATABLE_NAME, element);
+            entityName = fromJsonHelper.extractStringNamed(API_PARAM_APPTABLE_NAME, element);
+        } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
+            log.warn("Skipping cleanup of rejected command {}: command JSON cannot be read", commandSource.getId(), e);
+            return;
+        }
 
         if (!isOrphanOfRejectedCommand(commandSource, datatableName, entityName)) {
             return;
@@ -74,8 +83,8 @@ public class DatatableRejectionCleanupService implements CleanupService {
      * The command JSON of a rejected command is attacker controlled: it is stored as submitted and the domain
      * validation only runs while the command is being processed. Only a table that this command left behind may be
      * dropped, so the name is re-validated and the table must carry the foreign key constraint that
-     * {@link DatatableWriteServiceImpl#createDatatable} generates from this very datatable name, while not being a
-     * datatable registered by another (approved) command.
+     * {@link DatatableWriteServiceImpl#createDatatable} generates from this very datatable name along with the audit
+     * columns it adds, while not being a datatable registered by another (approved) command.
      */
     private boolean isOrphanOfRejectedCommand(final CommandSource commandSource, final String datatableName, final String entityName) {
         if (datatableName == null || entityName == null) {
@@ -97,7 +106,8 @@ public class DatatableRejectionCleanupService implements CleanupService {
             log.warn("Skipping cleanup of rejected command {}: datatable is registered", commandSource.getId());
             return false;
         }
-        if (!hasDatatableForeignKey(datatableName, datatableUtil.getFKField(entityTable))) {
+        final String fkColumnName = datatableUtil.getFKField(entityTable);
+        if (!hasDatatableForeignKey(datatableName, fkColumnName) || !hasDatatableColumns(datatableName, fkColumnName)) {
             log.warn("Skipping cleanup of rejected command {}: table was not created by this command", commandSource.getId());
             return false;
         }
@@ -111,12 +121,23 @@ public class DatatableRejectionCleanupService implements CleanupService {
     }
 
     private boolean hasDatatableForeignKey(final String datatableName, final String fkColumnName) {
-        final String fkName = "fk_" + datatableName.toLowerCase(Locale.ROOT).replaceAll("\\s", "_") + "_" + fkColumnName;
-        final String schemaSql = databaseTypeResolver.isMySQL() ? "i.TABLE_SCHEMA = SCHEMA()"
-                : "i.table_catalog = current_catalog AND i.table_schema = current_schema";
+        final String fkName = DatatableUtil.getForeignKeyConstraintName(datatableName, fkColumnName);
         final String sql = "SELECT count(*) FROM information_schema.TABLE_CONSTRAINTS i WHERE i.CONSTRAINT_TYPE = 'FOREIGN KEY' AND "
-                + schemaSql + " AND i.TABLE_NAME = ? AND i.CONSTRAINT_NAME = ?";
+                + currentSchemaClause() + " AND i.TABLE_NAME = ? AND i.CONSTRAINT_NAME = ?";
         final Integer count = jdbcTemplate.queryForObject(sql, Integer.class, datatableName, fkName); // NOSONAR
         return count != null && count > 0;
+    }
+
+    private boolean hasDatatableColumns(final String datatableName, final String fkColumnName) {
+        final String sql = "SELECT count(*) FROM information_schema.COLUMNS i WHERE " + currentSchemaClause()
+                + " AND i.TABLE_NAME = ? AND i.COLUMN_NAME IN (?, ?, ?)";
+        final Object[] params = { datatableName, fkColumnName, CREATEDAT_FIELD_NAME, UPDATEDAT_FIELD_NAME };
+        final Integer count = jdbcTemplate.queryForObject(sql, Integer.class, params); // NOSONAR
+        return count != null && count == 3;
+    }
+
+    private String currentSchemaClause() {
+        return databaseTypeResolver.isMySQL() ? "i.TABLE_SCHEMA = SCHEMA()"
+                : "i.table_catalog = current_catalog AND i.table_schema = current_schema";
     }
 }
