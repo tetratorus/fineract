@@ -36,6 +36,7 @@ import org.apache.fineract.cob.service.COBCatchUpService;
 import org.apache.fineract.cob.service.LoanCOBCatchUpServiceImpl;
 import org.apache.fineract.infrastructure.core.exception.JobIsNotFoundOrNotEnabledException;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/loans")
@@ -44,6 +45,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class LoanCOBCatchUpApiResource {
 
+    private final PlatformSecurityContext context;
     private final Optional<LoanCOBCatchUpServiceImpl> loanCOBCatchUpServiceOp;
 
     @GET
@@ -51,6 +53,7 @@ public class LoanCOBCatchUpApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieves the oldest COB processed loan", description = "Retrieves the COB business date and the oldest COB processed loan")
     public OldestCOBProcessedLoanDTO getOldestCOBProcessedLoan() {
+        COBCatchUpExecutorHelper.validateHasReadPermission(context);
         return loanCOBCatchUpServiceOp.map(COBCatchUpService::getOldestCOBProcessedLoan)
                 .orElseThrow(() -> new JobIsNotFoundOrNotEnabledException(JobName.LOAN_COB.name()));
     }
@@ -64,6 +67,7 @@ public class LoanCOBCatchUpApiResource {
     @ApiResponse(responseCode = "202", description = "Catch Up has been started")
     @ApiResponse(responseCode = "400", description = "Catch Up is already running")
     public Response executeLoanCOBCatchUp() {
+        COBCatchUpExecutorHelper.validateHasExecutePermission(context);
         return loanCOBCatchUpServiceOp.map(COBCatchUpExecutorHelper::executeLoanCOBCatchUp)
                 .orElseThrow(() -> new JobIsNotFoundOrNotEnabledException(JobName.LOAN_COB.name()));
     }
@@ -73,6 +77,7 @@ public class LoanCOBCatchUpApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Retrieves whether Loan COB catch up is running", description = "Retrieves whether Loan COB catch up is running, and the current execution date if it is running.")
     public IsCatchUpRunningDTO isCatchUpRunning() {
+        COBCatchUpExecutorHelper.validateHasReadPermission(context);
         return loanCOBCatchUpServiceOp.map(COBCatchUpService::isCatchUpRunning).orElseGet(() -> new IsCatchUpRunningDTO(false, null));
     }
 }
