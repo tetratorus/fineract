@@ -64,6 +64,7 @@ import org.apache.fineract.infrastructure.documentmanagement.data.DocumentDelete
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentUpdateRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentUpdateResponse;
 import org.apache.fineract.infrastructure.documentmanagement.service.DocumentReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -88,6 +89,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DocumentApiResource {
 
+    private static final String RESOURCE_NAME_FOR_PERMISSIONS = "DOCUMENT";
+
+    private final PlatformSecurityContext context;
     private final DocumentReadPlatformService documentReadPlatformService;
     private final FileUploadValidator fileUploadValidator;
     private final ContentDetectorManager contentDetectorManager;
@@ -105,6 +109,8 @@ public class DocumentApiResource {
     public List<DocumentData> retrieveAllDocuments(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId) {
 
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         return documentReadPlatformService.retrieveAllDocuments(entityType, entityId);
     }
 
@@ -121,6 +127,8 @@ public class DocumentApiResource {
     public DocumentData getDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
+
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         return documentReadPlatformService.retrieveDocument(entityType, entityId, documentId);
     }
@@ -140,6 +148,8 @@ public class DocumentApiResource {
     public Response downloadFile(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
+
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         final var content = documentReadPlatformService.retrieveDocumentContent(entityType, entityId, documentId);
 
@@ -174,6 +184,8 @@ public class DocumentApiResource {
             @FormDataParam(DOCUMENT_API_PARAM_NAME) final String name,
             @FormDataParam(DOCUMENT_API_PARAM_DESCRIPTION) final String description,
             @FormDataParam("issuanceDate") final String issuanceDate, @FormDataParam("expiryDate") final String expiryDate) {
+
+        context.authenticatedUser().validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         fileUploadValidator.validate(fileSize, is, fileDetails, filePart);
 
@@ -217,6 +229,8 @@ public class DocumentApiResource {
             @FormDataParam(DOCUMENT_API_PARAM_DESCRIPTION) final String description,
             @FormDataParam("issuanceDate") final String issuanceDate, @FormDataParam("expiryDate") final String expiryDate) {
 
+        context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         final var command = new DocumentUpdateCommand();
 
         final var request = DocumentUpdateRequest.builder().id(documentId).entityId(entityId).entityType(entityType).name(name)
@@ -245,6 +259,8 @@ public class DocumentApiResource {
     public DocumentDeleteResponse deleteDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
+
+        context.authenticatedUser().validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         final var command = new DocumentDeleteCommand();
 
