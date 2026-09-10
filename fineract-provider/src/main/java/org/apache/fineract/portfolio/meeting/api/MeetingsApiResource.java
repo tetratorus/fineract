@@ -37,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.calendar.data.CalendarData;
 import org.apache.fineract.portfolio.calendar.domain.CalendarEntityType;
 import org.apache.fineract.portfolio.calendar.exception.CalendarEntityTypeNotSupportedException;
@@ -68,6 +69,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MeetingsApiResource {
 
+    private static final String RESOURCE_NAME_FOR_PERMISSIONS = "MEETING";
+
+    private final PlatformSecurityContext context;
     private final MeetingReadService meetingReadService;
     private final MeetingAttendanceReadService meetingAttendanceReadService;
     private final MeetingAttendanceDropdownReadService meetingAttendanceDropdownReadService;
@@ -81,6 +85,8 @@ public class MeetingsApiResource {
     @AlternativeOperationId("template_11")
     public MeetingData template(@PathParam("entityType") final String entityType, @PathParam("entityId") final Long entityId,
             @QueryParam("calendarId") final Long calendarId) {
+
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         CalendarData calendarData = null;
 
@@ -117,6 +123,8 @@ public class MeetingsApiResource {
     public Collection<MeetingData> retrieveMeetings(@PathParam("entityType") final String entityType,
             @PathParam("entityId") final Long entityId, @QueryParam("limit") final Integer limit) {
 
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         return meetingReadService.retrieveMeetingsByEntity(entityId,
                 CalendarEntityType.valueOf(entityType.toUpperCase(Locale.ROOT)).getValue(), limit);
     }
@@ -127,6 +135,8 @@ public class MeetingsApiResource {
     @AlternativeOperationId("retrieveMeeting")
     public MeetingData retrieveMeeting(@PathParam("meetingId") final Long meetingId, @PathParam("entityType") final String entityType,
             @PathParam("entityId") final Long entityId) {
+
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         var meetingData = meetingReadService.retrieveMeeting(meetingId, entityId,
                 CalendarEntityType.valueOf(entityType.toUpperCase(Locale.ROOT)).getValue());
@@ -142,6 +152,8 @@ public class MeetingsApiResource {
     @Operation(summary = "Create a Meeting", operationId = "createMeeting")
     public MeetingCreateResponse createMeeting(@PathParam("entityType") final String entityType, @PathParam("entityId") final Long entityId,
             final MeetingCreateRequest request) {
+
+        context.authenticatedUser().validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
 
         var calendarEntityType = CalendarEntityType.getEntityType(entityType);
 
@@ -169,6 +181,8 @@ public class MeetingsApiResource {
     public MeetingUpdateResponse updateMeeting(@PathParam("entityType") final String entityType, @PathParam("entityId") final Long entityId,
             @PathParam("meetingId") final Long meetingId, final MeetingUpdateRequest request) {
 
+        context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         var calendarEntityType = CalendarEntityType.getEntityType(entityType);
 
         if (calendarEntityType == null) {
@@ -194,6 +208,8 @@ public class MeetingsApiResource {
     public MeetingDeleteResponse deleteMeeting(@PathParam("entityType") final String entityType, @PathParam("entityId") final Long entityId,
             @PathParam("meetingId") final Long meetingId) {
 
+        context.authenticatedUser().validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         var request = MeetingDeleteRequest.builder().id(meetingId).entityId(entityId).entityType(entityType).build();
 
         final var command = new MeetingDeleteCommand();
@@ -213,6 +229,8 @@ public class MeetingsApiResource {
     public MeetingAttendanceUpdateResponse updateMeetingAttendance(@PathParam("entityType") final String entityType,
             @PathParam("entityId") final Long entityId, @PathParam("meetingId") final Long meetingId,
             @QueryParam("command") final String commandParam, final MeetingAttendanceUpdateRequest request) {
+
+        context.authenticatedUser().validateHasPermissionTo("SAVEORUPDATEATTENDANCE_MEETING");
 
         final CalendarEntityType calendarEntityType = CalendarEntityType.getEntityType(entityType);
 
