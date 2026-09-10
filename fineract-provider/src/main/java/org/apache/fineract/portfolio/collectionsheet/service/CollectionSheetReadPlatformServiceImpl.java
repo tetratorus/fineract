@@ -39,7 +39,6 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -206,7 +205,9 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
         public String collectionSheetSchema(final boolean isCenterCollection) {
             StringBuilder sql = new StringBuilder(400);
-            sql.append("SELECT loandata.*, sum(lc.amount_outstanding_derived) as chargesDue from ")
+            sql.append("SELECT loandata.*, ").append(
+                    "(SELECT sum(lc.amount_outstanding_derived) FROM m_loan_charge lc WHERE lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true ")
+                    .append("AND (lc.due_for_collection_as_of_date <= :dueDate OR lc.charge_time_enum = 1)) as chargesDue from ")
                     .append("(SELECT gp.display_name As groupName, ").append("gp.id As groupId, ").append("cl.display_name As clientName, ")
                     .append("sf.id As staffId, ").append("sf.display_name As staffName, ").append("gl.id As levelId, ")
                     .append("gl.level_name As levelName, ").append("cl.id As clientId, ").append("ln.id As loanId, ")
@@ -242,11 +243,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
             sql.append("and (gp.status_enum = 300 or (gp.status_enum = 600 and gp.closedon_date >= :dueDate)) ")
                     .append("and (cl.status_enum = 300 or (cl.status_enum = 600 and cl.closedon_date >= :dueDate)) ")
-                    .append("GROUP BY gp.id, cl.id, ln.id, ca.attendance_type_enum ORDER BY gp.id , cl.id , ln.id ").append(") loandata ")
-                    .append("LEFT JOIN m_loan_charge lc ON lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true ")
-                    .append("AND ( lc.due_for_collection_as_of_date  <= :dueDate OR lc.charge_time_enum = 1) ")
-                    .append("GROUP BY loandata.groupId, loandata.clientId, loandata.loanId ")
-                    .append(", loandata.principalDue, loandata.interestDue, loandata.feeDue, loandata.attendanceTypeId ")
+                    .append("GROUP BY gp.id, cl.id, ln.id, sf.id, gl.id, pl.id, rc.id, ca.attendance_type_enum ").append(") loandata ")
                     .append("ORDER BY loandata.groupId, ").append("loandata.clientId, ").append("loandata.loanId ");
 
             return sql.toString();
@@ -308,7 +305,6 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
         final Long calendarId = query.longValueOfParameterNamed(calendarIdParamName);
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String transactionDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
 
         final Calendar calendar = this.calendarRepositoryWrapper.findOneWithNotFoundDetection(calendarId);
         // check if transaction against calendar effective from date
@@ -345,7 +341,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
         final JLGCollectionSheetFaltDataMapper mapper = new JLGCollectionSheetFaltDataMapper(sqlGenerator);
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("groupId", group.getId()).addValue("officeHierarchy", officeHierarchy)
                 .addValue("entityTypeId", entityType.getValue());
 
@@ -443,13 +439,12 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         final CenterData center = this.centerReadPlatformService.retrieveOne(centerId);
 
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String dueDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
 
         final JLGCollectionSheetFaltDataMapper mapper = new JLGCollectionSheetFaltDataMapper(sqlGenerator);
 
         StringBuilder sql = new StringBuilder(mapper.collectionSheetSchema(true));
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", dueDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("centerId", center.getId()).addValue("officeHierarchy", officeHierarchy)
                 .addValue("entityTypeId", CalendarEntityType.CENTERS.getValue());
 
@@ -513,7 +508,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
             sql.append("and (gp.status_enum = 300 or (gp.status_enum = 600 and gp.closedon_date >= :dueDate)) ")
                     .append("and (cl.status_enum = 300 or (cl.status_enum = 600 and cl.closedon_date >= :dueDate)) ")
-                    .append("GROUP BY gp.id ,cl.id , sa.id ORDER BY gp.id , cl.id , sa.id ");
+                    .append("GROUP BY gp.id, cl.id, sa.id, sf.id, gl.id, sp.id, rc.id ORDER BY gp.id, cl.id, sa.id ");
 
             return sql.toString();
         }
@@ -659,7 +654,6 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         this.collectionSheetGenerateCommandFromApiJsonDeserializer.validateForGenerateCollectionSheetOfIndividuals(query.json());
 
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String transactionDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
 
         final AppUser currentUser = this.context.authenticatedUser();
         final String hierarchy = currentUser.getOffice().getHierarchy();
@@ -673,7 +667,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         final IndividualCollectionSheetFaltDataMapper mapper = new IndividualCollectionSheetFaltDataMapper(checkForOfficeId,
                 checkForStaffId, sqlGenerator);
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("officeHierarchy", officeHierarchy);
 
         if (checkForOfficeId) {
@@ -708,7 +702,10 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         IndividualCollectionSheetFaltDataMapper(final boolean checkForOfficeId, final boolean checkforStaffId,
                 DatabaseSpecificSQLGenerator sqlGenerator) {
             StringBuilder sb = new StringBuilder();
-            sb.append("SELECT loandata.*, sum(lc.amount_outstanding_derived) as chargesDue ");
+            sb.append("SELECT loandata.*, ");
+            sb.append(
+                    "(SELECT sum(lc.amount_outstanding_derived) FROM m_loan_charge lc WHERE lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true ");
+            sb.append("AND (lc.due_for_collection_as_of_date <= :dueDate OR lc.charge_time_enum = 1)) as chargesDue ");
             sb.append("from (SELECT cl.display_name As clientName, ");
             sb.append("cl.id As clientId, ln.id As loanId, ln.account_no As accountId, ln.loan_status_id As accountStatusId,");
             sb.append(" pl.short_name As productShortName, ln.product_id As productId, ");
@@ -740,10 +737,8 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
                 sb.append("ln.loan_officer_id = :staffId and ");
             }
             sb.append("(ln.loan_status_id = 300) ");
-            sb.append("and ln.group_id is null GROUP BY cl.id , ln.id ORDER BY cl.id , ln.id ) loandata ");
-            sb.append(
-                    "LEFT JOIN m_loan_charge lc ON lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true AND ( lc.due_for_collection_as_of_date  <= :dueDate OR lc.charge_time_enum = 1) ");
-            sb.append("GROUP BY loandata.clientId, loandata.loanId ORDER BY loandata.clientId, loandata.loanId ");
+            sb.append("and ln.group_id is null GROUP BY cl.id, ln.id, pl.id, rc.id ) loandata ");
+            sb.append("ORDER BY loandata.clientId, loandata.loanId ");
 
             sql = sb.toString();
         }
@@ -826,7 +821,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
             if (checkforStaffId) {
                 sb.append("and sa.field_officer_id = :staffId ");
             }
-            sb.append("GROUP BY cl.id , sa.id ORDER BY cl.id , sa.id ");
+            sb.append("GROUP BY cl.id, sa.id, sp.id, rc.id ORDER BY cl.id, sa.id ");
 
             this.sql = sb.toString();
         }
