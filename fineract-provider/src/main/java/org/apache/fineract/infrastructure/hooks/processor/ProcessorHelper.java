@@ -27,6 +27,7 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ public final class ProcessorHelper {
      */
     private final boolean insecureHttpClient = Boolean.getBoolean("fineract.insecureHttpClient");
     private final SSLContext insecureSSLContext;
+    private final WebHookUrlValidator urlValidator = new WebHookUrlValidator();
 
     public ProcessorHelper() throws KeyManagementException, NoSuchAlgorithmException {
         if (insecureHttpClient) {
@@ -77,6 +79,9 @@ public final class ProcessorHelper {
 
     private OkHttpClient createClient() {
         var okBuilder = new OkHttpClient.Builder();
+        okBuilder.dns(urlValidator);
+        okBuilder.followRedirects(false);
+        okBuilder.followSslRedirects(false);
         if (insecureHttpClient) {
             configureInsecureClient(okBuilder);
         }
@@ -112,10 +117,15 @@ public final class ProcessorHelper {
         };
     }
 
+    /**
+     * @throws IllegalArgumentException
+     *             if the URL is not an allowed, publicly routable http(s) URL (see {@link WebHookUrlValidator})
+     */
     public WebHookService createWebHookService(final String url) {
+        final HttpUrl validatedUrl = urlValidator.validate(url);
         final OkHttpClient client = createClient();
         final Retrofit.Builder retrofitBuilder = new Retrofit.Builder();
-        retrofitBuilder.baseUrl(url);
+        retrofitBuilder.baseUrl(validatedUrl);
         retrofitBuilder.client(client);
         retrofitBuilder.addConverterFactory(GsonConverterFactory.create());
         final Retrofit retrofit = retrofitBuilder.build();
