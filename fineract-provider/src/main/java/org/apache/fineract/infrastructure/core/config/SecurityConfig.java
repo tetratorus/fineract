@@ -370,8 +370,12 @@ public class SecurityConfig {
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/*/*/meeting/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_MEETING")
                     // hook
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/hooks"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_HOOK")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/hooks/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_HOOK")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/hooks"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_HOOK")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/hooks/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_HOOK")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/hooks/*"))
