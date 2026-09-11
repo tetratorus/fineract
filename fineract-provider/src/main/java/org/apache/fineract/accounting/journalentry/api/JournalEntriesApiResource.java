@@ -59,6 +59,8 @@ import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.api.DateParam;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.data.DateFormat;
+import org.apache.fineract.infrastructure.core.data.PaginationParameters;
+import org.apache.fineract.infrastructure.core.data.PaginationParametersDataValidator;
 import org.apache.fineract.infrastructure.core.data.UploadRequest;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -86,6 +88,11 @@ public class JournalEntriesApiResource {
             "entityType", "entityId", "createdByUserId", "createdDate", "submittedOnDate", "createdByUserName", "comments", "reversed",
             "referenceNumber", "currency", "transactionDetails"));
 
+    private static final Set<String> SUPPORTED_ORDER_BY_VALUES = new HashSet<>(Arrays.asList("id", "officeId", "officeName",
+            "glAccountName", "glAccountId", "glAccountCode", "transactionDate", "entryType", "amount", "transactionId", "manualEntry",
+            "entityType", "entityId", "createdByUserId", "createdByUserName", "submittedOnDate", "reversed", "referenceNumber",
+            "currencyCode"));
+
     private static final String RESOURCE_NAME_FOR_PERMISSION = "JOURNALENTRY";
 
     private final PlatformSecurityContext context;
@@ -96,6 +103,7 @@ public class JournalEntriesApiResource {
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
     private final SqlValidator sqlValidator;
+    private final PaginationParametersDataValidator paginationParametersDataValidator;
 
     @GET
     @Produces({ MediaType.APPLICATION_JSON })
@@ -154,6 +162,8 @@ public class JournalEntriesApiResource {
 
         sqlValidator.validate(orderBy);
         sqlValidator.validate(sortOrder);
+        this.paginationParametersDataValidator.validateParameterValues(
+                PaginationParameters.builder().orderBy(orderBy).sortOrder(sortOrder).build(), SUPPORTED_ORDER_BY_VALUES, "journalentries");
         final SearchParameters searchParameters = SearchParameters.builder().limit(limit).officeId(officeId).offset(offset).orderBy(orderBy)
                 .sortOrder(sortOrder).loanId(loanId).savingsId(savingsId).build();
         JournalEntryAssociationParametersData associationParametersData = new JournalEntryAssociationParametersData(transactionDetails,
