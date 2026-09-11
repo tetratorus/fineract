@@ -91,6 +91,9 @@ public class ReadReportingServiceImpl implements ReadReportingService {
     /** A plain integer with no leading zeros, so identifiers like {@code 000123} stay strings. */
     private static final Pattern UNTYPED_INTEGER = Pattern.compile("-?(0|[1-9]\\d*)");
 
+    /** The only shapes allowed to be spliced into SQL text as a display literal: a number or an ISO date. */
+    private static final Pattern DISPLAY_LITERAL_VALUE = Pattern.compile("-?\\d+(\\.\\d+)?|\\d{4}-\\d{2}-\\d{2}");
+
     private final JdbcTemplate jdbcTemplate;
     private final PlatformSecurityContext context;
     private final GenericDataService genericDataService;
@@ -259,8 +262,13 @@ public class ReadReportingServiceImpl implements ReadReportingService {
                     throw new InputValidationException("Parameter '%s' of type '%s' cannot be used in display-literal position"
                             .formatted(paramName, formatType != null ? formatType : "unregistered"));
                 }
+                String value = entry.getValue();
+                if (value == null || !DISPLAY_LITERAL_VALUE.matcher(value).matches()) {
+                    throw new InputValidationException(
+                            "Parameter '%s' has an invalid value for display-literal position".formatted(paramName));
+                }
                 // Substitute as string literal — preserves varchar return type
-                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(entry.getValue()) + "'$1");
+                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(value) + "'$1");
             }
         }
 
