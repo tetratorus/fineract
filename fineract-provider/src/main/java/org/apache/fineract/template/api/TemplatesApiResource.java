@@ -48,6 +48,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.template.command.TemplateCreateCommand;
 import org.apache.fineract.template.command.TemplateDeleteCommand;
 import org.apache.fineract.template.command.TemplateUpdateCommand;
@@ -79,7 +80,9 @@ public class TemplatesApiResource {
 
     public static final String ID = "id";
     public static final String PARAM_TEMPLATE = "template";
+    private static final String RESOURCE_NAME_FOR_PERMISSION = "TEMPLATE";
 
+    private final PlatformSecurityContext context;
     private final TemplateDomainService templateService;
     private final TemplateMergeServiceImpl templateMergeService;
     private final CommandDispatcher dispatcher;
@@ -104,6 +107,7 @@ public class TemplatesApiResource {
     public List<TemplateData> retrieveAllTemplates(
             @DefaultValue("-1") @QueryParam("typeId") @Parameter(description = "typeId") final int typeId,
             @DefaultValue("-1") @QueryParam("entityId") @Parameter(description = "entityId") final int entityId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
         if (typeId != -1 && entityId != -1) {
             return templateService.getAllByEntityAndType(findTemplateEntity(entityId), findTemplateType(typeId));
         } else {
@@ -128,6 +132,7 @@ public class TemplatesApiResource {
             """, responses = @ApiResponse(responseCode = "default", content = @Content(schema = @Schema(implementation = TemplateData.class))))
     @AlternativeOperationId("template_20")
     public TemplateDetailsData retrieveTemplateDetails() {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
         return templateDetails(null);
     }
 
@@ -139,6 +144,7 @@ public class TemplatesApiResource {
             - templates/1""")
     @AlternativeOperationId("retrieveOne_30")
     public TemplateData retrieveOneTemplate(@PathParam("templateId") @Parameter(description = "templateId") final Long templateId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
         return templateService.findOneById(templateId);
     }
 
@@ -147,6 +153,7 @@ public class TemplatesApiResource {
     @Operation(operationId = "retrieveTemplateById", responses = @ApiResponse(responseCode = "default", content = @Content(schema = @Schema(implementation = TemplateData.class))))
     @AlternativeOperationId("getTemplateByTemplate")
     public TemplateDetailsData retrieveTemplateById(@PathParam("templateId") final Long templateId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
         return templateDetails(templateService.findOneById(templateId));
     }
 
@@ -161,6 +168,7 @@ public class TemplatesApiResource {
 
             - templates/1""")
     public TemplateCreateResponse createTemplate(@RequestBody(required = true) @Valid final TemplateCreateRequest request) {
+        context.authenticatedUser().validateHasCreatePermission(RESOURCE_NAME_FOR_PERMISSION);
         final var command = new TemplateCreateCommand();
         command.setPayload(request);
 
@@ -174,6 +182,7 @@ public class TemplatesApiResource {
     @Operation(summary = "Update a UGD", description = "")
     public TemplateUpdateResponse saveTemplate(@PathParam("templateId") @Parameter(description = "templateId") final Long templateId,
             @RequestBody(required = true) @Valid final TemplateUpdateRequest request) {
+        context.authenticatedUser().validateHasUpdatePermission(RESOURCE_NAME_FOR_PERMISSION);
         final var command = new TemplateUpdateCommand();
         command.setPayload(request);
 
@@ -186,6 +195,7 @@ public class TemplatesApiResource {
     @Path("{templateId}")
     @Operation(summary = "Delete a UGD", description = "")
     public TemplateDeleteResponse deleteTemplate(@PathParam("templateId") @Parameter(description = "templateId") final Long templateId) {
+        context.authenticatedUser().validateHasDeletePermission(RESOURCE_NAME_FOR_PERMISSION);
         final var command = new TemplateDeleteCommand();
         command.setPayload(TemplateDeleteRequest.builder().id(templateId).build());
 
@@ -199,6 +209,7 @@ public class TemplatesApiResource {
     @Produces({ MediaType.TEXT_HTML })
     public String mergeTemplate(@PathParam("templateId") @Parameter(description = "templateId") final Long templateId,
             @Context final UriInfo uriInfo, @RequestBody(required = true) final Map<String, Object> result) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSION);
 
         var template = templateService.findOneById(templateId);
 
