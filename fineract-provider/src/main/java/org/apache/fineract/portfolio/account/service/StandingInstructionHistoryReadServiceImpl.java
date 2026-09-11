@@ -26,8 +26,13 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
@@ -44,6 +49,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 public class StandingInstructionHistoryReadServiceImpl implements StandingInstructionHistoryReadService {
+
+    private static final Map<String, String> SUPPORTED_ORDER_BY_COLUMNS = Map.ofEntries(Map.entry("id", "atsi.id"),
+            Map.entry("name", "atsi.name"), Map.entry("status", "atsih.status"), Map.entry("executionTime", "atsih.execution_time"),
+            Map.entry("amount", "atsih.amount"), Map.entry("fromOfficeId", "fromoff.id"), Map.entry("fromOfficeName", "fromoff.name"),
+            Map.entry("toOfficeId", "tooff.id"), Map.entry("toOfficeName", "tooff.name"), Map.entry("fromClientId", "fromclient.id"),
+            Map.entry("fromClientName", "fromclient.display_name"), Map.entry("toClientId", "toclient.id"),
+            Map.entry("toClientName", "toclient.display_name"));
+    private static final Set<String> SUPPORTED_SORT_ORDER_VALUES = Set.of("ASC", "DESC");
 
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
@@ -137,11 +150,13 @@ public class StandingInstructionHistoryReadServiceImpl implements StandingInstru
 
         final SearchParameters searchParameters = standingInstructionDTO.searchParameters();
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            final String orderByColumn = resolveOrderByColumn(searchParameters.getOrderBy());
+            sqlBuilder.append(" order by ").append(orderByColumn);
+            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), orderByColumn);
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
+                final String sortOrder = resolveSortOrder(searchParameters.getSortOrder());
+                sqlBuilder.append(' ').append(sortOrder);
+                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), sortOrder);
             }
         }
 
@@ -157,6 +172,32 @@ public class StandingInstructionHistoryReadServiceImpl implements StandingInstru
         final Object[] finalObjectArray = paramObj.toArray();
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), finalObjectArray,
                 this.standingInstructionHistoryMapper);
+    }
+
+    private static String resolveOrderByColumn(final String orderBy) {
+        final String column = SUPPORTED_ORDER_BY_COLUMNS.get(orderBy);
+        if (column == null) {
+            final ApiParameterError error = ApiParameterError.parameterError(
+                    "validation.msg.standinginstructionhistory.orderBy.value.is.not.supported",
+                    "The orderBy value '" + orderBy + "' is not supported. The supported orderBy values are "
+                            + SUPPORTED_ORDER_BY_COLUMNS.keySet(),
+                    "orderBy", orderBy, SUPPORTED_ORDER_BY_COLUMNS.keySet().toString());
+            throw new PlatformApiDataValidationException(List.of(error));
+        }
+        return column;
+    }
+
+    private static String resolveSortOrder(final String sortOrder) {
+        final String normalized = sortOrder.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_SORT_ORDER_VALUES.contains(normalized)) {
+            final ApiParameterError error = ApiParameterError.parameterError(
+                    "validation.msg.standinginstructionhistory.sortOrder.value.is.not.supported",
+                    "The sortOrder value '" + sortOrder + "' is not supported. The supported sortOrder values are "
+                            + SUPPORTED_SORT_ORDER_VALUES,
+                    "sortOrder", sortOrder, SUPPORTED_SORT_ORDER_VALUES.toString());
+            throw new PlatformApiDataValidationException(List.of(error));
+        }
+        return normalized;
     }
 
     private static final class StandingInstructionHistoryMapper implements RowMapper<StandingInstructionHistoryData> {
