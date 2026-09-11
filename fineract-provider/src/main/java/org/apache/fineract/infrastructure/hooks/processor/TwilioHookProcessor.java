@@ -75,7 +75,6 @@ public class TwilioHookProcessor implements HookProcessor {
             smsProviderData.setUrl(null);
             smsProviderData.setEndpoint(System.getProperty("baseUrl"));
             smsProviderData.setTenantId(context.getTenantContext().getTenantIdentifier());
-            smsProviderData.setMifosToken(context.getAuthTokenContext());
             apiKey = service.sendSmsBridgeConfigRequest(smsProviderData).execute().body();
             final HookConfiguration apiKeyEntry = HookConfiguration.createNew(hook, "string", apiKeyName, apiKey);
             this.hookConfigurationRepository.save(apiKeyEntry);

@@ -39,7 +39,6 @@ public class HookSmsProviderData {
     private String smsProviderAccountId;
     private String smsProviderToken;
     private String tenantId;
-    private String mifosToken;
     private String endpoint;
 
     public HookSmsProviderData(final Set<HookConfiguration> config) {
