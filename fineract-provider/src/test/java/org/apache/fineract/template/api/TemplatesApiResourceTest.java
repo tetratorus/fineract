@@ -19,11 +19,18 @@
 package org.apache.fineract.template.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.apache.fineract.command.core.CommandDispatcher;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.template.data.TemplateCreateRequest;
 import org.apache.fineract.template.data.TemplateData;
 import org.apache.fineract.template.data.TemplateDetailsData;
 import org.apache.fineract.template.data.TemplateItemData;
@@ -32,6 +39,8 @@ import org.apache.fineract.template.domain.TemplateEntity;
 import org.apache.fineract.template.domain.TemplateType;
 import org.apache.fineract.template.service.TemplateDomainService;
 import org.apache.fineract.template.service.TemplateMergeServiceImpl;
+import org.apache.fineract.useradministration.domain.AppUser;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -50,8 +59,47 @@ class TemplatesApiResourceTest {
     @Mock
     private CommandDispatcher dispatcher;
 
+    @Mock
+    private PlatformSecurityContext context;
+
+    @Mock
+    private AppUser appUser;
+
     @InjectMocks
     private TemplatesApiResource resource;
+
+    @BeforeEach
+    void setUp() {
+        when(context.authenticatedUser()).thenReturn(appUser);
+    }
+
+    @Test
+    void retrieveAllTemplatesRequiresReadPermission() {
+        doThrow(new NoAuthorizationException("denied")).when(appUser).validateHasReadPermission("TEMPLATE");
+
+        assertThatThrownBy(() -> resource.retrieveAllTemplates(-1, -1)).isInstanceOf(NoAuthorizationException.class);
+
+        verify(templateService, never()).getAll();
+    }
+
+    @Test
+    void createTemplateRequiresCreatePermission() {
+        doThrow(new NoAuthorizationException("denied")).when(appUser).validateHasCreatePermission("TEMPLATE");
+
+        assertThatThrownBy(() -> resource.createTemplate(TemplateCreateRequest.builder().name("t").build()))
+                .isInstanceOf(NoAuthorizationException.class);
+
+        verify(dispatcher, never()).dispatch(any());
+    }
+
+    @Test
+    void deleteTemplateRequiresDeletePermission() {
+        doThrow(new NoAuthorizationException("denied")).when(appUser).validateHasDeletePermission("TEMPLATE");
+
+        assertThatThrownBy(() -> resource.deleteTemplate(1L)).isInstanceOf(NoAuthorizationException.class);
+
+        verify(dispatcher, never()).dispatch(any());
+    }
 
     @Test
     void retrieveAllTemplatesFiltersByApiTypeAndEntityIds() {
