@@ -314,9 +314,9 @@ public class SecurityConfig {
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/collateral-management/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_COLLATERAL_PRODUCT")
                     // bulk import
-                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/import"))
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/imports"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_IMPORT")
-                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/import/*"))
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/imports/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_IMPORT")
                     // payment type
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/paymenttypes/*"))
