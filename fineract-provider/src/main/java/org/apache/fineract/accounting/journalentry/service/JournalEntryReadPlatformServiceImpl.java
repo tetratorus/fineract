@@ -27,7 +27,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingEnumerations;
@@ -42,15 +45,16 @@ import org.apache.fineract.accounting.journalentry.data.OfficeOpeningBalancesDat
 import org.apache.fineract.accounting.journalentry.data.TransactionDetailData;
 import org.apache.fineract.accounting.journalentry.data.TransactionTypeEnumData;
 import org.apache.fineract.accounting.journalentry.exception.JournalEntriesNotFoundException;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.exception.GeneralPlatformDomainRuleException;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.organisation.office.data.OfficeData;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
@@ -77,11 +81,56 @@ public class JournalEntryReadPlatformServiceImpl implements JournalEntryReadPlat
     private final JdbcTemplate jdbcTemplate;
     private final GLAccountReadPlatformService glAccountReadPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
-    private final ColumnValidator columnValidator;
     private final FinancialActivityAccountRepositoryWrapper financialActivityAccountRepositoryWrapper;
 
     private final PaginationHelper paginationHelper;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
+
+    private static final Set<String> SUPPORTED_SORT_ORDER_VALUES = Set.of("ASC", "DESC");
+
+    private static final Map<String, String> SUPPORTED_ORDER_BY_COLUMNS = Map.ofEntries(Map.entry("id", "journalEntry.id"),
+            Map.entry("transactionid", "journalEntry.transaction_id"), Map.entry("transaction_id", "journalEntry.transaction_id"),
+            Map.entry("officeid", "journalEntry.office_id"), Map.entry("office_id", "journalEntry.office_id"),
+            Map.entry("officename", "office.name"), Map.entry("glaccountid", "glAccount.id"), Map.entry("glaccountname", "glAccount.name"),
+            Map.entry("glaccountcode", "glAccount.gl_code"), Map.entry("classification", "glAccount.classification_enum"),
+            Map.entry("referencenumber", "journalEntry.ref_num"), Map.entry("ref_num", "journalEntry.ref_num"),
+            Map.entry("manualentry", "journalEntry.manual_entry"), Map.entry("manual_entry", "journalEntry.manual_entry"),
+            Map.entry("transactiondate", "journalEntry.entry_date"), Map.entry("entry_date", "journalEntry.entry_date"),
+            Map.entry("entrytype", "journalEntry.type_enum"), Map.entry("type_enum", "journalEntry.type_enum"),
+            Map.entry("amount", "journalEntry.amount"), Map.entry("entitytype", "journalEntry.entity_type_enum"),
+            Map.entry("entity_type_enum", "journalEntry.entity_type_enum"), Map.entry("entityid", "journalEntry.entity_id"),
+            Map.entry("entity_id", "journalEntry.entity_id"), Map.entry("createdbyuserid", "creatingUser.id"),
+            Map.entry("createdbyusername", "creatingUser.username"), Map.entry("comments", "journalEntry.description"),
+            Map.entry("description", "journalEntry.description"), Map.entry("submittedondate", "journalEntry.submitted_on_date"),
+            Map.entry("submitted_on_date", "journalEntry.submitted_on_date"), Map.entry("reversed", "journalEntry.reversed"),
+            Map.entry("currencycode", "journalEntry.currency_code"), Map.entry("currency_code", "journalEntry.currency_code"),
+            Map.entry("currencyname", "curr.name"));
+
+    private static String resolveOrderBy(final String orderBy) {
+        final String column = SUPPORTED_ORDER_BY_COLUMNS.get(orderBy.trim().toLowerCase(Locale.ROOT));
+        if (column == null) {
+            throw invalidPaginationParameter("orderBy", orderBy, SUPPORTED_ORDER_BY_COLUMNS.keySet());
+        }
+        return column;
+    }
+
+    private static String resolveSortOrder(final String sortOrder) {
+        final String normalized = sortOrder.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_SORT_ORDER_VALUES.contains(normalized)) {
+            throw invalidPaginationParameter("sortOrder", sortOrder, SUPPORTED_SORT_ORDER_VALUES);
+        }
+        return normalized;
+    }
+
+    private static PlatformApiDataValidationException invalidPaginationParameter(final String parameterName, final String value,
+            final Set<String> supportedValues) {
+        final String defaultUserMessage = "The " + parameterName + " value '" + value + "' is not supported. The supported " + parameterName
+                + " values are " + supportedValues;
+        final ApiParameterError error = ApiParameterError.parameterError(
+                "validation.msg.journalentries." + parameterName + ".value.is.not.supported", defaultUserMessage, parameterName, value,
+                supportedValues.toString());
+        return new PlatformApiDataValidationException(List.of(error));
+    }
 
     protected static class GLJournalEntryMapper implements RowMapper<JournalEntryData> {
 
@@ -362,12 +411,10 @@ public class JournalEntryReadPlatformServiceImpl implements JournalEntryReadPlat
         }
 
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            sqlBuilder.append(" order by ").append(resolveOrderBy(searchParameters.getOrderBy()));
 
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+                sqlBuilder.append(' ').append(resolveSortOrder(searchParameters.getSortOrder()));
             }
         } else {
             sqlBuilder.append(" order by journalEntry.entry_date, journalEntry.id");
