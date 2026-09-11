@@ -32,6 +32,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -41,8 +42,9 @@ import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.reportmailingjob.ReportMailingJobConstants;
 import org.apache.fineract.infrastructure.reportmailingjob.data.ReportMailingJobRunHistoryData;
 import org.apache.fineract.infrastructure.reportmailingjob.service.ReportMailingJobRunHistoryReadPlatformService;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
+import org.apache.fineract.infrastructure.security.service.InputValidator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
-import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/" + ReportMailingJobConstants.REPORT_MAILING_JOB_RUN_HISTORY_RESOURCE_NAME)
@@ -51,11 +53,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReportMailingJobRunHistoryApiResource {
 
+    private static final String REPORT_MAILING_JOB_RUN_HISTORY_ORDER_BY_PROFILE = "report-mailing-job-run-history-order-by";
+
     private final PlatformSecurityContext platformSecurityContext;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final DefaultToApiJsonSerializer<ReportMailingJobRunHistoryData> reportMailingToApiJsonSerializer;
     private final ReportMailingJobRunHistoryReadPlatformService reportMailingJobRunHistoryReadPlatformService;
-    private final SqlValidator sqlValidator;
+    private final InputValidator inputValidator;
 
     @GET
     @Produces({ MediaType.APPLICATION_JSON })
@@ -71,8 +75,10 @@ public class ReportMailingJobRunHistoryApiResource {
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
         this.platformSecurityContext.authenticatedUser()
                 .validateHasReadPermission(ReportMailingJobConstants.REPORT_MAILING_JOB_ENTITY_NAME);
-        sqlValidator.validate(orderBy);
-        sqlValidator.validate(sortOrder);
+        inputValidator.validate(REPORT_MAILING_JOB_RUN_HISTORY_ORDER_BY_PROFILE, orderBy);
+        if (StringUtils.isNotBlank(sortOrder) && !"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+            throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+        }
         final SearchParameters searchParameters = SearchParameters.builder().limit(limit).offset(offset).orderBy(orderBy)
                 .sortOrder(sortOrder).build();
 
