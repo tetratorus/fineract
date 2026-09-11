@@ -67,7 +67,9 @@ import org.apache.fineract.infrastructure.jobs.data.JobDetailData;
 import org.apache.fineract.infrastructure.jobs.data.JobDetailHistoryData;
 import org.apache.fineract.infrastructure.jobs.service.JobRegisterService;
 import org.apache.fineract.infrastructure.jobs.service.SchedulerJobRunnerReadService;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
+import org.apache.fineract.infrastructure.security.service.InputValidator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.springframework.stereotype.Component;
@@ -88,6 +90,7 @@ public class SchedulerJobApiResource {
     private final PlatformSecurityContext context;
     private final FineractProperties fineractProperties;
     private final SqlValidator sqlValidator;
+    private final InputValidator inputValidator;
 
     @GET
     @Operation(summary = "Retrieve Scheduler Jobs", operationId = "retrieveAllSchedulerJobs", description = "Returns the list of jobs.\n"
@@ -215,6 +218,12 @@ public class SchedulerJobApiResource {
         context.authenticatedUser().validateHasReadPermission(SCHEDULER_RESOURCE_NAME);
         sqlValidator.validate(orderBy);
         sqlValidator.validate(sortOrder);
+        if (StringUtils.isNotBlank(orderBy)) {
+            inputValidator.validate("job-history-order-by", orderBy);
+        }
+        if (StringUtils.isNotBlank(sortOrder) && !"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+            throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+        }
         final SearchParameters searchParameters = SearchParameters.builder().limit(limit).offset(offset).orderBy(orderBy)
                 .sortOrder(sortOrder).build();
         final Page<JobDetailHistoryData> jobHistoryData = schedulerJobRunnerReadService.retrieveJobHistory(idType, identifier,
