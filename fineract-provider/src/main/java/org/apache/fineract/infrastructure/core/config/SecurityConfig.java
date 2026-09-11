@@ -160,7 +160,7 @@ public class SecurityConfig {
                     // currency
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/currencies"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_CURRENCY")
-                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/currencies"))
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/currencies"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_CURRENCY")
                     // notes: read
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/clients/*/notes"))

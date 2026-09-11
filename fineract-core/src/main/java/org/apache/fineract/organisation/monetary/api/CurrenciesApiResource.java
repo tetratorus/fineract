@@ -27,9 +27,11 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.command.CurrencyUpdateCommand;
 import org.apache.fineract.organisation.monetary.data.CurrencyConfigurationData;
 import org.apache.fineract.organisation.monetary.data.CurrencyUpdateRequest;
@@ -43,6 +45,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CurrenciesApiResource {
 
+    private static final String UPDATE_CURRENCY_PERMISSION = "UPDATE_CURRENCY";
+    private static final List<String> UPDATE_CURRENCY_ALLOWED_PERMISSIONS = List.of("ALL_FUNCTIONS", "ALL_FUNCTIONS_WRITE",
+            UPDATE_CURRENCY_PERMISSION);
+
+    private final PlatformSecurityContext context;
     private final OrganisationCurrencyReadPlatformService readPlatformService;
     private final CommandDispatcher dispatcher;
 
@@ -65,6 +72,8 @@ public class CurrenciesApiResource {
     @Produces({ MediaType.APPLICATION_JSON })
     @Operation(summary = "Update Currency Configuration", description = "Updates the list of currencies permitted for use.")
     public CurrencyUpdateResponse updateCurrencies(@Valid CurrencyUpdateRequest request) {
+        context.authenticatedUser().validateHasPermissionTo(UPDATE_CURRENCY_PERMISSION, UPDATE_CURRENCY_ALLOWED_PERMISSIONS);
+
         final var command = new CurrencyUpdateCommand();
 
         command.setPayload(request);
