@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,6 +35,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.dataqueries.data.GenericResultsetData;
 import org.apache.fineract.infrastructure.report.service.ReportParameterTypeResolver;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlInjectionPreventerService;
 import org.apache.fineract.organisation.office.domain.Office;
@@ -154,11 +156,60 @@ public class ReadReportingServiceImplTest {
         assertEquals(Long.valueOf(7L), boundParamsFor(Map.of("officeId", "7"))[0]);
     }
 
+    @Test
+    public void displayLiteralIntegerParameterRejectsNonNumericValue() {
+        stubReport(DISPLAY_LITERAL_REPORT_SQL, Map.of("year", "integer"));
+
+        assertThrows(InputValidationException.class, () -> readReportingService.retrieveGenericResultset(CASCADED_REPORT_NAME, "report",
+                Map.of("year", "x'||(select password from m_appuser)||'")));
+    }
+
+    @Test
+    public void displayLiteralIntegerParameterRejectsDecimalValue() {
+        stubReport(DISPLAY_LITERAL_REPORT_SQL, Map.of("year", "integer"));
+
+        assertThrows(InputValidationException.class,
+                () -> readReportingService.retrieveGenericResultset(CASCADED_REPORT_NAME, "report", Map.of("year", "2024.5")));
+    }
+
+    @Test
+    public void displayLiteralNumberParameterRejectsQuotedValue() {
+        stubReport(DISPLAY_LITERAL_REPORT_SQL, Map.of("year", "number"));
+
+        assertThrows(InputValidationException.class,
+                () -> readReportingService.retrieveGenericResultset(CASCADED_REPORT_NAME, "report", Map.of("year", "1' or '1'='1")));
+    }
+
+    @Test
+    public void displayLiteralDateParameterRejectsNonDateValue() {
+        stubReport(DISPLAY_LITERAL_REPORT_SQL, Map.of("year", "date"));
+
+        assertThrows(InputValidationException.class,
+                () -> readReportingService.retrieveGenericResultset(CASCADED_REPORT_NAME, "report", Map.of("year", "2024-01-01'--")));
+    }
+
+    @Test
+    public void displayLiteralIntegerParameterSubstitutesValidValue() {
+        stubReport(DISPLAY_LITERAL_REPORT_SQL, Map.of("year", "integer"));
+
+        readReportingService.retrieveGenericResultset(CASCADED_REPORT_NAME, "report", Map.of("year", "2024"));
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(genericDataService).fillGenericResultSet(captor.capture(), any());
+        assertEquals("select '2024' AS year from m_office", captor.getValue());
+    }
+
+    private static final String DISPLAY_LITERAL_REPORT_SQL = "select '${year}' AS year from m_office";
+
     /** Serves {@link #CASCADED_REPORT_SQL} for {@link #CASCADED_REPORT_NAME} with the given declared format types. */
     private void stubCascadedReport(Map<String, String> paramFormatTypes) {
+        stubReport(CASCADED_REPORT_SQL, paramFormatTypes);
+    }
+
+    private void stubReport(String reportSql, Map<String, String> paramFormatTypes) {
         SqlRowSet rowSet = mock(SqlRowSet.class);
         when(rowSet.next()).thenReturn(true);
-        when(rowSet.getString("the_sql")).thenReturn(CASCADED_REPORT_SQL);
+        when(rowSet.getString("the_sql")).thenReturn(reportSql);
         when(jdbcTemplate.queryForRowSet(anyString(), eq(CASCADED_REPORT_NAME))).thenReturn(rowSet);
         when(sqlInjectionPreventerService.quoteIdentifier(anyString())).thenAnswer(call -> call.getArgument(0));
         when(reportParameterTypeResolver.loadParamFormatTypes(CASCADED_REPORT_NAME)).thenReturn(paramFormatTypes);
@@ -174,9 +225,9 @@ public class ReadReportingServiceImplTest {
         when(sqlGenerator.currentTenantDateTime()).thenReturn("'2024-01-01 00:00:00'");
 
         // pass the SQL through untouched so the assertions are about the bound values, not the rewriting
-        when(genericDataService.wrapSQL(anyString())).thenAnswer(call -> call.getArgument(0));
+        lenient().when(genericDataService.wrapSQL(anyString())).thenAnswer(call -> call.getArgument(0));
         when(genericDataService.replace(anyString(), anyString(), anyString())).thenAnswer(call -> call.getArgument(0));
-        when(genericDataService.fillGenericResultSet(anyString(), any())).thenReturn(mock(GenericResultsetData.class));
+        lenient().when(genericDataService.fillGenericResultSet(anyString(), any())).thenReturn(mock(GenericResultsetData.class));
     }
 
     /** Runs the cascaded report and returns the values actually bound to the prepared statement. */
