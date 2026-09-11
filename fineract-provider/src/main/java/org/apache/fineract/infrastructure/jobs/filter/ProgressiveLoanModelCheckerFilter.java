@@ -25,7 +25,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.http.BodyCachingHttpServletRequestWrapper;
+import org.apache.fineract.infrastructure.core.http.RequestBodyTooLargeException;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanModelProcessingService;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
 import org.springframework.stereotype.Component;
@@ -37,11 +39,17 @@ public class ProgressiveLoanModelCheckerFilter extends OncePerRequestFilter {
 
     private final ProgressiveLoanModelProcessingService progressiveLoanModelProcessingService;
     private final ProgressiveLoanModelCheckerHelper helper;
+    private final FineractProperties fineractProperties;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        request = new BodyCachingHttpServletRequestWrapper(request);
+        try {
+            request = BodyCachingHttpServletRequestWrapper.wrap(request, fineractProperties.getApi().getMaxRequestBodySize().toBytes());
+        } catch (RequestBodyTooLargeException e) {
+            e.toServletResponse(response);
+            return;
+        }
 
         if (!helper.isOnApiList((BodyCachingHttpServletRequestWrapper) request)) {
             proceed(filterChain, request, response);
