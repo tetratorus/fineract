@@ -55,7 +55,8 @@ public class OidcAppUserResolutionServiceImpl implements OidcAppUserResolutionSe
 
     @Override
     @Transactional
-    public AppUser resolveOrCreate(String username, String email, String firstName, String lastName, Set<String> requestedRoles) {
+    public AppUser resolveOrCreate(String username, String email, boolean emailVerified, String firstName, String lastName,
+            Set<String> requestedRoles) {
 
         // 1. Lookup by username
         AppUser user = appUserRepository.findAppUserByName(username);
@@ -64,12 +65,16 @@ public class OidcAppUserResolutionServiceImpl implements OidcAppUserResolutionSe
             return user;
         }
 
-        // 2. Fallback: lookup by email
+        // 2. Fallback: lookup by email — only when the IdP asserted the address is verified
         if (email != null) {
-            user = appUserRepository.findActiveUserByEmail(email);
-            if (user != null) {
-                log.debug("OIDC user resolved by email: '{}'", email);
-                return user;
+            if (emailVerified) {
+                user = appUserRepository.findActiveUserByEmail(email);
+                if (user != null) {
+                    log.debug("OIDC user resolved by email: '{}'", email);
+                    return user;
+                }
+            } else {
+                log.debug("OIDC email claim for '{}' is not verified — skipping email lookup", username);
             }
         }
 

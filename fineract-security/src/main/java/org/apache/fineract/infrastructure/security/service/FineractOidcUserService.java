@@ -24,10 +24,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.security.data.FineractOidcUser;
+import org.apache.fineract.infrastructure.security.exception.OidcUserNotFoundException;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -49,13 +51,15 @@ public class FineractOidcUserService {
      * {@code FineractOidcJwtAuthenticationConverter}.
      */
     public AppUser resolveUser(Jwt jwt, String username) {
-        String email = jwt.getClaimAsString("email");
-        String firstName = jwt.getClaimAsString("given_name");
-        String lastName = jwt.getClaimAsString("family_name");
+        String email = jwt.getClaimAsString(StandardClaimNames.EMAIL);
+        boolean emailVerified = Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED));
+        String firstName = jwt.getClaimAsString(StandardClaimNames.GIVEN_NAME);
+        String lastName = jwt.getClaimAsString(StandardClaimNames.FAMILY_NAME);
 
         log.debug("Resolving Fineract user for OIDC subject '{}' (username claim: '{}')", jwt.getSubject(), username);
 
-        return resolutionService.resolveOrCreate(username, email, firstName, lastName, Set.of());
+        rejectUnverifiedEmailUsername(jwt.getSubject(), emailVerified);
+        return resolutionService.resolveOrCreate(username, email, emailVerified, firstName, lastName, Set.of());
     }
 
     /**
@@ -71,18 +75,33 @@ public class FineractOidcUserService {
         }
 
         String email = oidcUser.getEmail();
+        boolean emailVerified = Boolean.TRUE.equals(oidcUser.getEmailVerified());
         String firstName = oidcUser.getGivenName();
         String lastName = oidcUser.getFamilyName();
 
         log.debug("Processing OIDC user '{}' for tenant '{}'", username, tenantId);
 
-        AppUser appUser = resolutionService.resolveOrCreate(username, email, firstName, lastName, Set.of());
+        rejectUnverifiedEmailUsername(oidcUser.getSubject(), emailVerified);
+        AppUser appUser = resolutionService.resolveOrCreate(username, email, emailVerified, firstName, lastName, Set.of());
 
         Collection<? extends GrantedAuthority> authorities = appUser.getAuthorities();
         OidcIdToken idToken = oidcUser.getIdToken();
         OidcUserInfo userInfo = oidcUser.getUserInfo();
 
         return new FineractOidcUser(authorities, idToken, userInfo, appUser, tenantId);
+    }
+
+    /**
+     * When the configured username claim is {@code email}, the username itself is only trustworthy if the IdP asserted
+     * {@code email_verified}; otherwise an attacker could set an arbitrary email at the IdP and be mapped to that
+     * Fineract account.
+     */
+    private void rejectUnverifiedEmailUsername(String subject, boolean emailVerified) {
+        String usernameClaim = fineractProperties.getSecurity().getOidcFederation().getUsernameClaim();
+        if (StandardClaimNames.EMAIL.equals(usernameClaim) && !emailVerified) {
+            log.warn("OIDC subject '{}' presented an unverified email claim while username-claim=email — rejecting", subject);
+            throw new OidcUserNotFoundException(subject);
+        }
     }
 
     /**

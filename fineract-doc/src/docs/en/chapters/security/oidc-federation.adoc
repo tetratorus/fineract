@@ -594,7 +594,8 @@ If no tenant can be resolved, the filter chain continues without setting a tenan
 On every authenticated request, `FineractOidcJwtAuthenticationConverter` maps the incoming JWT to a Fineract `AppUser`:
 
 1. Look up by username (value of the `username-claim` claim, or the per-issuer override from the DB config / `issuers[]` entry).
-2. Fall back to email lookup if the username is not found.
+2. Fall back to email lookup if the username is not found — only when the token carries `email_verified: true`. Unverified email claims are never used for lookup.
+   Likewise, when `username-claim` is `email`, tokens without `email_verified: true` are rejected outright.
 3. If still not found and `auto-create-user=true`: create a new `AppUser` with a random placeholder password, assigned to the head office (id=1) and the roles listed in `default-roles`.
 4. If not found and `auto-create-user=false`: reject with HTTP 401.
 

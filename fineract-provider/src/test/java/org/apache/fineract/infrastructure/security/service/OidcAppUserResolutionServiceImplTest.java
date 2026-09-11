@@ -94,7 +94,7 @@ class OidcAppUserResolutionServiceImplTest {
     void returnsExistingUserFoundByUsername() {
         when(appUserRepository.findAppUserByName("alice")).thenReturn(existingUser);
 
-        AppUser result = service.resolveOrCreate("alice", "alice@example.com", "Alice", "Smith", Set.of());
+        AppUser result = service.resolveOrCreate("alice", "alice@example.com", true, "Alice", "Smith", Set.of());
 
         assertThat(result).isSameAs(existingUser);
         verify(appUserRepository, never()).findActiveUserByEmail(any());
@@ -102,13 +102,27 @@ class OidcAppUserResolutionServiceImplTest {
     }
 
     @Test
-    void fallsBackToEmailWhenUsernameNotFound() {
+    void fallsBackToVerifiedEmailWhenUsernameNotFound() {
         when(appUserRepository.findAppUserByName("alice")).thenReturn(null);
         when(appUserRepository.findActiveUserByEmail("alice@example.com")).thenReturn(existingUser);
 
-        AppUser result = service.resolveOrCreate("alice", "alice@example.com", "Alice", "Smith", Set.of());
+        AppUser result = service.resolveOrCreate("alice", "alice@example.com", true, "Alice", "Smith", Set.of());
 
         assertThat(result).isSameAs(existingUser);
+        verify(appUserRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void doesNotFallBackToEmailWhenEmailIsNotVerified() {
+        when(appUserRepository.findAppUserByName("attacker")).thenReturn(null);
+        when(appUserRepository.findActiveUserByEmail("admin@example.com")).thenReturn(existingUser);
+        when(oidcProps.isAutoCreateUser()).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                service.resolveOrCreate("attacker", "admin@example.com", false, "Mal", "Ory", Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(appUserRepository, never()).findActiveUserByEmail(any());
         verify(appUserRepository, never()).saveAndFlush(any());
     }
 
@@ -119,7 +133,7 @@ class OidcAppUserResolutionServiceImplTest {
         when(oidcProps.isAutoCreateUser()).thenReturn(false);
 
         assertThatThrownBy(() ->
-                service.resolveOrCreate("ghost", "ghost@example.com", "Ghost", "User", Set.of()))
+                service.resolveOrCreate("ghost", "ghost@example.com", true, "Ghost", "User", Set.of()))
                 .isInstanceOf(OidcUserNotFoundException.class)
                 .extracting(e -> ((OidcUserNotFoundException) e).getSubject())
                 .isEqualTo("ghost");
@@ -136,7 +150,7 @@ class OidcAppUserResolutionServiceImplTest {
         AppUser savedUser = org.mockito.Mockito.mock(AppUser.class);
         when(appUserRepository.saveAndFlush(any(AppUser.class))).thenReturn(savedUser);
 
-        AppUser result = service.resolveOrCreate("newuser", "new@example.com", "New", "User", Set.of());
+        AppUser result = service.resolveOrCreate("newuser", "new@example.com", true, "New", "User", Set.of());
 
         assertThat(result).isSameAs(savedUser);
         verify(appUserRepository).saveAndFlush(any(AppUser.class));
@@ -150,7 +164,7 @@ class OidcAppUserResolutionServiceImplTest {
         when(officeRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.resolveOrCreate("newuser", "new@example.com", "New", "User", Set.of()))
+                service.resolveOrCreate("newuser", "new@example.com", true, "New", "User", Set.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Head office");
     }
@@ -161,7 +175,7 @@ class OidcAppUserResolutionServiceImplTest {
         when(oidcProps.isAutoCreateUser()).thenReturn(false);
 
         assertThatThrownBy(() ->
-                service.resolveOrCreate("alice", null, "Alice", "Smith", Set.of()))
+                service.resolveOrCreate("alice", null, true, "Alice", "Smith", Set.of()))
                 .isInstanceOf(OidcUserNotFoundException.class);
 
         verify(appUserRepository, never()).findActiveUserByEmail(any());
