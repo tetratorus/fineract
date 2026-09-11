@@ -64,6 +64,7 @@ import org.apache.fineract.infrastructure.documentmanagement.data.DocumentDelete
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentUpdateRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentUpdateResponse;
 import org.apache.fineract.infrastructure.documentmanagement.service.DocumentReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -88,6 +89,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DocumentApiResource {
 
+    private static final String DOCUMENT_RESOURCE_NAME = "DOCUMENT";
+    private static final List<String> UPDATE_DOCUMENT_PERMISSIONS = List.of("ALL_FUNCTIONS", "ALL_FUNCTIONS_WRITE", "UPDATE_DOCUMENT");
+    private static final List<String> DELETE_DOCUMENT_PERMISSIONS = List.of("ALL_FUNCTIONS", "ALL_FUNCTIONS_WRITE", "DELETE_DOCUMENT");
+
+    private final PlatformSecurityContext context;
     private final DocumentReadPlatformService documentReadPlatformService;
     private final FileUploadValidator fileUploadValidator;
     private final ContentDetectorManager contentDetectorManager;
@@ -122,6 +128,8 @@ public class DocumentApiResource {
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
 
+        context.authenticatedUser().validateHasReadPermission(DOCUMENT_RESOURCE_NAME);
+
         return documentReadPlatformService.retrieveDocument(entityType, entityId, documentId);
     }
 
@@ -140,6 +148,8 @@ public class DocumentApiResource {
     public Response downloadFile(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
+
+        context.authenticatedUser().validateHasReadPermission(DOCUMENT_RESOURCE_NAME);
 
         final var content = documentReadPlatformService.retrieveDocumentContent(entityType, entityId, documentId);
 
@@ -217,6 +227,8 @@ public class DocumentApiResource {
             @FormDataParam(DOCUMENT_API_PARAM_DESCRIPTION) final String description,
             @FormDataParam("issuanceDate") final String issuanceDate, @FormDataParam("expiryDate") final String expiryDate) {
 
+        context.authenticatedUser().validateHasPermissionTo("UPDATE_DOCUMENT", UPDATE_DOCUMENT_PERMISSIONS);
+
         final var command = new DocumentUpdateCommand();
 
         final var request = DocumentUpdateRequest.builder().id(documentId).entityId(entityId).entityType(entityType).name(name)
@@ -245,6 +257,8 @@ public class DocumentApiResource {
     public DocumentDeleteResponse deleteDocument(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId,
             @PathParam(DOCUMENT_API_PARAM_DOCUMENT_ID) final Long documentId) {
+
+        context.authenticatedUser().validateHasPermissionTo("DELETE_DOCUMENT", DELETE_DOCUMENT_PERMISSIONS);
 
         final var command = new DocumentDeleteCommand();
 
