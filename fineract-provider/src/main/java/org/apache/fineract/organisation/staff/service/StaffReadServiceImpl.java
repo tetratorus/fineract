@@ -34,6 +34,7 @@ import org.apache.fineract.organisation.staff.exception.StaffNotFoundException;
 import org.apache.fineract.portfolio.client.domain.ClientStatus;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType;
+import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -248,9 +249,16 @@ public class StaffReadServiceImpl implements StaffReadService {
     @Override
     public List<StaffData> retrieveAllStaffInOfficeAndItsParentOfficeHierarchy(final Long officeId, final boolean loanOfficersOnly) {
 
+        // adding the Authorization criteria so that a user cannot see an
+        // employee who does not belong to his office or a sub office for his
+        // office.
+        final AppUser currentUser = this.context.authenticatedUser();
+        final String hierarchy = currentUser.getOffice().getHierarchy() + "%";
+        final Long officeIdDefaulted = officeId != null ? officeId : currentUser.getOffice().getId();
+
         String sql = "select " + STAFF_IN_OFFICE_HIERARCHY_MAPPER.schema(loanOfficersOnly);
-        sql = sql + " order by s.lastname";
-        return this.jdbcTemplate.query(sql, STAFF_IN_OFFICE_HIERARCHY_MAPPER, officeId); // NOSONAR
+        sql = sql + " and o.hierarchy like ? order by s.lastname";
+        return this.jdbcTemplate.query(sql, STAFF_IN_OFFICE_HIERARCHY_MAPPER, officeIdDefaulted, hierarchy); // NOSONAR
     }
 
     @Override
