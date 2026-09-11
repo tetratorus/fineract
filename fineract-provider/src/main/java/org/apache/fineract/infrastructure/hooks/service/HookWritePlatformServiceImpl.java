@@ -57,6 +57,7 @@ import org.apache.fineract.infrastructure.hooks.domain.HookTemplate;
 import org.apache.fineract.infrastructure.hooks.domain.HookTemplateRepository;
 import org.apache.fineract.infrastructure.hooks.exception.HookNotFoundException;
 import org.apache.fineract.infrastructure.hooks.exception.HookTemplateNotFoundException;
+import org.apache.fineract.infrastructure.hooks.exception.WebHookUrlNotAllowedException;
 import org.apache.fineract.infrastructure.hooks.mapper.HookEventMapper;
 import org.apache.fineract.infrastructure.hooks.processor.ProcessorHelper;
 import org.apache.fineract.template.domain.Template;
@@ -158,6 +159,8 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
 
                 hook.setConfig(assembleConfig(request.getConfig(), hook.getTemplate()));
                 hook.getConfig().forEach(hookConfiguration -> hookConfiguration.setHook(hook));
+
+                validatePayloadUrls(hook.getConfig());
             }
 
             if (!changes.isEmpty()) {
@@ -238,12 +241,7 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
             }
 
             if (conf.getFieldName().equals(payloadURLName)) {
-                try {
-                    var service = processorHelper.createWebHookService(fieldValue);
-                    service.sendEmptyRequest().execute();
-                } catch (IOException re) {
-                    baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.invalid");
-                }
+                validatePayloadUrl(fieldValue, baseDataValidator);
             }
         }
 
@@ -271,6 +269,32 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
 
         if (!dataValidationErrors.isEmpty()) {
             throw new PlatformApiDataValidationException(dataValidationErrors);
+        }
+    }
+
+    private void validatePayloadUrls(final Set<HookConfiguration> config) {
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("hook");
+
+        for (final HookConfiguration conf : config) {
+            if (conf.getFieldName().equals(payloadURLName)) {
+                validatePayloadUrl(conf.getFieldValue(), baseDataValidator);
+            }
+        }
+
+        if (!dataValidationErrors.isEmpty()) {
+            throw new PlatformApiDataValidationException(dataValidationErrors);
+        }
+    }
+
+    private void validatePayloadUrl(final String url, final DataValidatorBuilder baseDataValidator) {
+        try {
+            var service = processorHelper.createWebHookService(url);
+            service.sendEmptyRequest().execute();
+        } catch (WebHookUrlNotAllowedException e) {
+            baseDataValidator.reset().parameter(payloadURLName).value(url).failWithCodeNoParameterAddedToErrorCode("url.not.allowed");
+        } catch (IOException re) {
+            baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.invalid");
         }
     }
 

@@ -27,6 +27,7 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +67,10 @@ public final class ProcessorHelper {
      */
     private final boolean insecureHttpClient = Boolean.getBoolean("fineract.insecureHttpClient");
     private final SSLContext insecureSSLContext;
+    private final WebHookUrlValidator urlValidator;
 
-    public ProcessorHelper() throws KeyManagementException, NoSuchAlgorithmException {
+    public ProcessorHelper(final WebHookUrlValidator urlValidator) throws KeyManagementException, NoSuchAlgorithmException {
+        this.urlValidator = urlValidator;
         if (insecureHttpClient) {
             insecureSSLContext = createInsecureSSLContext();
         } else {
@@ -76,7 +79,7 @@ public final class ProcessorHelper {
     }
 
     private OkHttpClient createClient() {
-        var okBuilder = new OkHttpClient.Builder();
+        var okBuilder = new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).dns(urlValidator.restrictedDns());
         if (insecureHttpClient) {
             configureInsecureClient(okBuilder);
         }
@@ -112,10 +115,15 @@ public final class ProcessorHelper {
         };
     }
 
+    /**
+     * @throws org.apache.fineract.infrastructure.hooks.exception.WebHookUrlNotAllowedException
+     *             if the URL fails {@link WebHookUrlValidator} checks
+     */
     public WebHookService createWebHookService(final String url) {
+        final HttpUrl baseUrl = urlValidator.validate(url);
         final OkHttpClient client = createClient();
         final Retrofit.Builder retrofitBuilder = new Retrofit.Builder();
-        retrofitBuilder.baseUrl(url);
+        retrofitBuilder.baseUrl(baseUrl);
         retrofitBuilder.client(client);
         retrofitBuilder.addConverterFactory(GsonConverterFactory.create());
         final Retrofit retrofit = retrofitBuilder.build();
