@@ -24,6 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Map;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
@@ -32,6 +33,7 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.organisation.office.data.OfficeData;
@@ -53,6 +55,18 @@ import org.springframework.util.CollectionUtils;
 public class AccountTransfersReadPlatformServiceImpl implements AccountTransfersReadPlatformService {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final Map<String, String> ORDER_BY_COLUMNS = Map.ofEntries(Map.entry("id", "att.id"),
+            Map.entry("isreversed", "att.is_reversed"), Map.entry("transferdate", "att.transaction_date"),
+            Map.entry("transferamount", "att.amount"), Map.entry("transferdescription", "att.description"),
+            Map.entry("currencycode", "att.currency_code"), Map.entry("fromofficeid", "fromoff.id"),
+            Map.entry("fromofficename", "fromoff.name"), Map.entry("toofficeid", "tooff.id"), Map.entry("toofficename", "tooff.name"),
+            Map.entry("fromclientid", "fromclient.id"), Map.entry("fromclientname", "fromclient.display_name"),
+            Map.entry("toclientid", "toclient.id"), Map.entry("toclientname", "toclient.display_name"),
+            Map.entry("fromsavingsaccountid", "fromsavacc.id"), Map.entry("fromsavingsaccountno", "fromsavacc.account_no"),
+            Map.entry("fromloanaccountid", "fromloanacc.id"), Map.entry("fromloanaccountno", "fromloanacc.account_no"),
+            Map.entry("tosavingsaccountid", "tosavacc.id"), Map.entry("tosavingsaccountno", "tosavacc.account_no"),
+            Map.entry("toloanaccountid", "toloanacc.id"), Map.entry("toloanaccountno", "toloanacc.account_no"),
+            Map.entry("paymenttypeid", "pd.payment_type_id"), Map.entry("paymenttypename", "pt.value"));
     private final JdbcTemplate jdbcTemplate;
     private final ClientReadPlatformService clientReadPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
@@ -207,14 +221,7 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
             finalObjectArray = new Object[] { accountDetailId };
         }
 
-        if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
-            if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
-            }
-        }
+        appendOrderBy(sqlBuilder, searchParameters);
 
         if (searchParameters.hasLimit()) {
             sqlBuilder.append(" limit ").append(searchParameters.getLimit());
@@ -224,6 +231,25 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
         }
 
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), finalObjectArray, this.accountTransfersMapper);
+    }
+
+    private static void appendOrderBy(final StringBuilder sqlBuilder, final SearchParameters searchParameters) {
+        if (!searchParameters.hasOrderBy()) {
+            return;
+        }
+        final String orderBy = searchParameters.getOrderBy().trim();
+        final String column = ORDER_BY_COLUMNS.get(orderBy.toLowerCase());
+        if (column == null) {
+            throw new InputValidationException(String.format("invalid orderBy value '%s'", orderBy));
+        }
+        sqlBuilder.append(" order by ").append(column);
+        if (searchParameters.hasSortOrder()) {
+            final String sortOrder = searchParameters.getSortOrder().trim();
+            if (!"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+                throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+            }
+            sqlBuilder.append(' ').append(sortOrder.toUpperCase());
+        }
     }
 
     @Override
@@ -276,14 +302,7 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
         sqlBuilder.append(" where atsi.id = ?");
 
         if (searchParameters != null) {
-            if (searchParameters.hasOrderBy()) {
-                sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
-                if (searchParameters.hasSortOrder()) {
-                    sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                    this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
-                }
-            }
+            appendOrderBy(sqlBuilder, searchParameters);
 
             if (searchParameters.hasLimit()) {
                 sqlBuilder.append(" ");
