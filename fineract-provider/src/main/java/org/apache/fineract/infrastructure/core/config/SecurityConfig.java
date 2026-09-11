@@ -356,6 +356,8 @@ public class SecurityConfig {
                     // staff
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/staff/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_STAFF")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/staff"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_STAFF")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/staff/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_STAFF")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/staff/*"))
