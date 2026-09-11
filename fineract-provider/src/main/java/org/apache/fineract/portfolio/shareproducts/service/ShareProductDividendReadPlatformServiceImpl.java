@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
@@ -32,7 +33,7 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
 import org.apache.fineract.portfolio.shareaccounts.data.ShareAccountDividendData;
 import org.apache.fineract.portfolio.shareaccounts.service.SharesEnumerations;
 import org.apache.fineract.portfolio.shareproducts.data.ShareProductData;
@@ -44,9 +45,16 @@ import org.springframework.jdbc.core.RowMapper;
 public class ShareProductDividendReadPlatformServiceImpl implements ShareProductDividendReadPlatformService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final ColumnValidator columnValidator;
     private final PaginationHelper paginationHelper;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
+
+    private static final Map<String, String> ORDER_BY_COLUMNS = Map.ofEntries(Map.entry("id", "pod.id"), Map.entry("pod.id", "pod.id"),
+            Map.entry("amount", "pod.amount"), Map.entry("pod.amount", "pod.amount"), Map.entry("status", "pod.status"),
+            Map.entry("pod.status", "pod.status"), Map.entry("startDate", "pod.dividend_period_start_date"),
+            Map.entry("pod.dividend_period_start_date", "pod.dividend_period_start_date"),
+            Map.entry("endDate", "pod.dividend_period_end_date"),
+            Map.entry("pod.dividend_period_end_date", "pod.dividend_period_end_date"), Map.entry("productId", "sp.id"),
+            Map.entry("sp.id", "sp.id"), Map.entry("productName", "sp.name"), Map.entry("sp.name", "sp.name"));
 
     @Override
     public Page<ShareProductDividendPayOutData> retriveAll(final Long productId, final Integer status,
@@ -63,12 +71,19 @@ public class ShareProductDividendReadPlatformServiceImpl implements ShareProduct
             params.add(status);
         }
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            final String orderBy = searchParameters.getOrderBy().trim();
+            final String orderByColumn = ORDER_BY_COLUMNS.get(orderBy);
+            if (orderByColumn == null) {
+                throw new InputValidationException(String.format("invalid orderBy value '%s'", orderBy));
+            }
+            sqlBuilder.append(" order by ").append(orderByColumn);
 
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
+                final String sortOrder = searchParameters.getSortOrder().trim();
+                if (!"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+                    throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+                }
+                sqlBuilder.append(' ').append("DESC".equalsIgnoreCase(sortOrder) ? "DESC" : "ASC");
             }
         }
 

@@ -25,7 +25,6 @@ import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.organisation.monetary.service.CurrencyReadPlatformService;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.products.service.ShareProductReadPlatformService;
@@ -68,8 +67,8 @@ public class ShareProductsConfiguration {
     @Bean
     @ConditionalOnMissingBean(ShareProductDividendReadPlatformService.class)
     public ShareProductDividendReadPlatformService shareProductDividendReadPlatformService(JdbcTemplate jdbcTemplate,
-            ColumnValidator columnValidator, PaginationHelper paginationHelper, DatabaseSpecificSQLGenerator sqlGenerator) {
-        return new ShareProductDividendReadPlatformServiceImpl(jdbcTemplate, columnValidator, paginationHelper, sqlGenerator);
+            PaginationHelper paginationHelper, DatabaseSpecificSQLGenerator sqlGenerator) {
+        return new ShareProductDividendReadPlatformServiceImpl(jdbcTemplate, paginationHelper, sqlGenerator);
 
     }
 
