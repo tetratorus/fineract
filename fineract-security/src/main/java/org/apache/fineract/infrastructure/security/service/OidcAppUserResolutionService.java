@@ -28,10 +28,12 @@ import org.apache.fineract.useradministration.domain.AppUser;
 public interface OidcAppUserResolutionService {
 
     /**
-     * Looks up an existing AppUser by username, falling back to email. If no match is found and auto-create is enabled,
-     * creates a new user with the supplied attributes and the configured default roles merged with any requested roles.
-     * Throws {@link org.apache.fineract.infrastructure.security.exception.OidcUserNotFoundException} when the user is
-     * not found and auto-create is disabled.
+     * Looks up an existing AppUser by username, falling back to email only when {@code emailVerified} is {@code true}
+     * (i.e. the IdP asserted the {@code email_verified} claim). If no match is found and auto-create is enabled, creates
+     * a new user with the supplied attributes and the configured default roles merged with any requested roles. Throws
+     * {@link org.apache.fineract.infrastructure.security.exception.OidcUserNotFoundException} when the user is not
+     * found and auto-create is disabled.
      */
-    AppUser resolveOrCreate(String username, String email, String firstName, String lastName, Set<String> requestedRoles);
+    AppUser resolveOrCreate(String username, String email, boolean emailVerified, String firstName, String lastName,
+            Set<String> requestedRoles);
 }
