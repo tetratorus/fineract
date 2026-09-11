@@ -116,6 +116,7 @@ public final class DepositsApiConstants {
     public static final String annualInterestRateParamName = "annualInterestRate";
     public static final String interestPostingPeriodInMonthsParamName = "interestPostingPeriodInMonths";
     public static final String tenureInMonthsParamName = "tenureInMonths";
+    public static final long MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC = 1200L;
     public static final String interestCompoundingPeriodInMonthsParamName = "interestCompoundingPeriodInMonths";
 
     // Preclosure parameters

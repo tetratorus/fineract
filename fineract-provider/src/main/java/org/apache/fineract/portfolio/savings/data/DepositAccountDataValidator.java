@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.savings.data;
 
+import static org.apache.fineract.portfolio.savings.DepositsApiConstants.MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.adjustAdvanceTowardsFuturePaymentsParamName;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.allowWithdrawalParamName;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.annualInterestRateParamName;
@@ -615,6 +616,10 @@ public class DepositAccountDataValidator {
 
         Long tenureInMonths = this.fromApiJsonHelper.extractLongNamed(tenureInMonthsParamName, element);
         baseDataValidator.reset().parameter(tenureInMonthsParamName).value(tenureInMonths).notNull().longGreaterThanZero();
+        if (tenureInMonths != null && tenureInMonths > MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC) {
+            baseDataValidator.reset().parameter(tenureInMonthsParamName).value(tenureInMonths).failWithCode("is.greater.than.max",
+                    "tenureInMonths must not exceed " + MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC);
+        }
 
         Long interestPostingPeriodInMonths = this.fromApiJsonHelper.extractLongNamed(interestPostingPeriodInMonthsParamName, element);
         baseDataValidator.reset().parameter(interestPostingPeriodInMonthsParamName).value(interestPostingPeriodInMonths).notNull()
