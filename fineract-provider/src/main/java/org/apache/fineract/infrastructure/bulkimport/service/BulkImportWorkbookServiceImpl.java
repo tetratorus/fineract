@@ -60,6 +60,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService {
 
+    private static final String IMPORT_RESOURCE_NAME = "IMPORT";
+
     private final TransactionBoundApplicationEventPublisher eventPublisher;
     private final PlatformSecurityContext securityContext;
     private final ImportDocumentRepository importDocumentRepository;
@@ -203,7 +205,7 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
 
     @Override
     public Collection<ImportData> getImports(GlobalEntityType type) {
-        this.securityContext.authenticatedUser();
+        this.securityContext.authenticatedUser().validateHasReadPermission(IMPORT_RESOURCE_NAME);
 
         final ImportMapper rm = new ImportMapper();
         final String sql = "select " + rm.schema() + " order by i.id desc";
@@ -213,6 +215,7 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
 
     @Override
     public ImportData getImport(Long id) {
+        this.securityContext.authenticatedUser().validateHasReadPermission(IMPORT_RESOURCE_NAME);
         return importDocumentRepository.findById(id).map(mapper::map).orElse(null);
     }
 
