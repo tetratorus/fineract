@@ -48,6 +48,9 @@ public class OkHttp3Config {
                 .writeTimeout(Duration.ofSeconds(fineractProperties.getClientWriteTimeout())); //
 
         if (Boolean.TRUE.equals(fineractProperties.getInsecureHttpClient())) {
+            log.warn("fineract.insecure-http-client is enabled: outbound TLS certificate and hostname verification is DISABLED. "
+                    + "This exposes outbound HTTPS calls (e.g. credit bureau integrations) to man-in-the-middle attacks and must "
+                    + "never be used in production.");
             final X509TrustManager insecureX509TrustManager = new X509TrustManager() {
 
                 @Override
