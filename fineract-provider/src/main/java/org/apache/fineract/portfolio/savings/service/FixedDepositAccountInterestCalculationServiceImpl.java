@@ -19,6 +19,7 @@
 
 package org.apache.fineract.portfolio.savings.service;
 
+import static org.apache.fineract.portfolio.savings.DepositsApiConstants.MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.annualInterestRateParamName;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.interestCompoundingPeriodInMonthsParamName;
 import static org.apache.fineract.portfolio.savings.DepositsApiConstants.principalAmountParamName;
@@ -64,6 +65,9 @@ public class FixedDepositAccountInterestCalculationServiceImpl implements FixedD
 
     public BigDecimal calculateInterestInternal(BigDecimal principalAmount, BigDecimal annualInterestRate, Long tenureInMonths,
             Long interestCompoundingPeriodInMonths) {
+        if (tenureInMonths > MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC) {
+            throw new IllegalArgumentException("tenureInMonths must not exceed " + MAX_TENURE_IN_MONTHS_FOR_INTEREST_CALC);
+        }
         BigDecimal numberOfCompoundingsPerAnnum = BigDecimal.valueOf(12).divide(BigDecimal.valueOf(interestCompoundingPeriodInMonths));
         Long totalNumberOfCompoundings = tenureInMonths / interestCompoundingPeriodInMonths;
         MathContext mc = MoneyHelper.getMathContext();

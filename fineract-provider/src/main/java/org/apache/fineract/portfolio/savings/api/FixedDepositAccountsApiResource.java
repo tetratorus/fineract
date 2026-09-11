@@ -252,6 +252,8 @@ public class FixedDepositAccountsApiResource {
             @QueryParam("tenureInMonths") @Parameter(description = "tenureInMonths") final Long tenureInMonths,
             @QueryParam("interestCompoundingPeriodInMonths") @Parameter(description = "interestCompoundingPeriodInMonths") final Long interestCompoundingPeriodInMonths,
             @QueryParam("interestPostingPeriodInMonths") @Parameter(description = "interestPostingPeriodInMonths") final Long interestPostingPeriodInMonths) {
+        this.context.authenticatedUser().validateHasReadPermission(DepositsApiConstants.FIXED_DEPOSIT_ACCOUNT_RESOURCE_NAME);
+
         HashMap<String, Object> request = new HashMap<>();
         request.put("annualInterestRate", annualInterestRate);
         request.put("tenureInMonths", tenureInMonths);
