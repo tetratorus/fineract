@@ -26,6 +26,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.security.data.OidcIdentity;
 import org.apache.fineract.infrastructure.security.exception.OidcUserNotFoundException;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
@@ -55,21 +56,37 @@ public class OidcAppUserResolutionServiceImpl implements OidcAppUserResolutionSe
 
     @Override
     @Transactional
-    public AppUser resolveOrCreate(String username, String email, String firstName, String lastName, Set<String> requestedRoles) {
+    public AppUser resolveOrCreate(OidcIdentity identity, Set<String> requestedRoles) {
+        String issuer = identity.issuer();
+        String subject = identity.subject();
+        String username = identity.username();
+        String email = identity.email();
 
-        // 1. Lookup by username
-        AppUser user = appUserRepository.findAppUserByName(username);
+        if (issuer == null || issuer.isBlank() || subject == null || subject.isBlank()) {
+            log.warn("OIDC token for username '{}' lacks issuer or subject — refusing to resolve a Fineract user", username);
+            throw new OidcUserNotFoundException(username);
+        }
+
+        // 1. Lookup by stable external identity (issuer, sub)
+        AppUser user = appUserRepository.findByOidcIdentity(issuer, subject);
         if (user != null) {
-            log.debug("OIDC user resolved by username: '{}'", username);
+            log.debug("OIDC user resolved by bound identity issuer='{}' subject='{}'", issuer, subject);
             return user;
         }
 
-        // 2. Fallback: lookup by email
-        if (email != null) {
+        // 2. First-login linking: only via an IdP-verified email, to an unbound, non-system account
+        if (email != null && identity.emailVerified()) {
             user = appUserRepository.findActiveUserByEmail(email);
-            if (user != null) {
-                log.debug("OIDC user resolved by email: '{}'", email);
+            if (user != null && !user.hasOidcIdentity() && !user.isSystemUser()) {
+                user.bindOidcIdentity(issuer, subject);
+                appUserRepository.saveAndFlush(user);
+                log.info("Linked Fineract user '{}' to OIDC identity issuer='{}' subject='{}' via verified email", user.getUsername(),
+                        issuer, subject);
                 return user;
+            }
+            if (user != null) {
+                log.warn("OIDC identity issuer='{}' subject='{}' matched existing user '{}' by email but linking is not permitted",
+                        issuer, subject, user.getUsername());
             }
         }
 
@@ -78,16 +95,27 @@ public class OidcAppUserResolutionServiceImpl implements OidcAppUserResolutionSe
                 .getOidcFederation();
 
         if (!oidcConfig.isAutoCreateUser()) {
-            log.warn("OIDC user '{}' not found in Fineract and auto-create is disabled", username);
+            log.warn("OIDC identity issuer='{}' subject='{}' (username '{}') not bound to any Fineract user and auto-create is disabled",
+                    issuer, subject, username);
             throw new OidcUserNotFoundException(username);
         }
 
-        log.info("Auto-creating Fineract user for OIDC subject '{}'", username);
-        return createUser(username, email, firstName, lastName, requestedRoles, oidcConfig);
+        if (appUserRepository.findAppUserByName(username) != null) {
+            log.warn("Cannot auto-create OIDC user '{}': username already exists and is not bound to issuer='{}' subject='{}'", username,
+                    issuer, subject);
+            throw new OidcUserNotFoundException(username);
+        }
+
+        log.info("Auto-creating Fineract user for OIDC identity issuer='{}' subject='{}'", issuer, subject);
+        return createUser(identity, requestedRoles, oidcConfig);
     }
 
-    private AppUser createUser(String username, String email, String firstName, String lastName, Set<String> requestedRoles,
+    private AppUser createUser(OidcIdentity identity, Set<String> requestedRoles,
             FineractProperties.FineractSecurityProperties.FineractSecurityOidcFederationProperties oidcConfig) {
+        String username = identity.username();
+        String email = identity.email();
+        String firstName = identity.firstName();
+        String lastName = identity.lastName();
 
         final Office headOffice = officeRepository.findById(fineractProperties.getDefaults().getOfficeId())
                 .orElseThrow(() -> new IllegalStateException("Head office (id=1) not found — cannot auto-create OIDC user"));
@@ -103,6 +131,7 @@ public class OidcAppUserResolutionServiceImpl implements OidcAppUserResolutionSe
         String resolvedLastName = lastName != null ? lastName : "";
 
         AppUser appUser = new AppUser(headOffice, springUser, roles, resolvedEmail, resolvedFirstName, resolvedLastName, null, true, false);
+        appUser.bindOidcIdentity(identity.issuer(), identity.subject());
 
         AppUser saved = appUserRepository.saveAndFlush(appUser);
         log.info("Auto-created Fineract user '{}' (id={}) from OIDC identity", username, saved.getId());

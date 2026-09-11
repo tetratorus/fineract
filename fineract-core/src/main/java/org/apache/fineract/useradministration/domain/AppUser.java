@@ -155,6 +155,14 @@ public class AppUser extends AbstractPersistableCustom<Long> implements Platform
     @Column(name = "is_password_reset_enabled", nullable = false)
     private boolean passwordResetAllowed = false;
 
+    @Getter
+    @Column(name = "oidc_issuer", length = 255)
+    private String oidcIssuer;
+
+    @Getter
+    @Column(name = "oidc_subject", length = 255)
+    private String oidcSubject;
+
     public static AppUser fromJson(final Office userOffice, final Staff linkedStaff, final Set<Role> allRoles, final JsonCommand command) {
 
         final String username = command.stringValueOfParameterNamed("username");
@@ -428,6 +436,21 @@ public class AppUser extends AbstractPersistableCustom<Long> implements Platform
 
     public boolean isDeleted() {
         return this.deleted;
+    }
+
+    public boolean hasOidcIdentity() {
+        return this.oidcIssuer != null && this.oidcSubject != null;
+    }
+
+    /**
+     * Binds this user to a stable external OIDC identity. A binding is immutable once established.
+     */
+    public void bindOidcIdentity(final String issuer, final String subject) {
+        if (hasOidcIdentity() && !(this.oidcIssuer.equals(issuer) && this.oidcSubject.equals(subject))) {
+            throw new IllegalStateException("User '" + this.username + "' is already bound to a different OIDC identity");
+        }
+        this.oidcIssuer = issuer;
+        this.oidcSubject = subject;
     }
 
     public boolean isSystemUser() {

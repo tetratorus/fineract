@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.security.data.FineractOidcUser;
+import org.apache.fineract.infrastructure.security.data.OidcIdentity;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
@@ -49,13 +50,16 @@ public class FineractOidcUserService {
      * {@code FineractOidcJwtAuthenticationConverter}.
      */
     public AppUser resolveUser(Jwt jwt, String username) {
+        String issuer = jwt.getIssuer() != null ? jwt.getIssuer().toString() : null;
         String email = jwt.getClaimAsString("email");
+        boolean emailVerified = Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"));
         String firstName = jwt.getClaimAsString("given_name");
         String lastName = jwt.getClaimAsString("family_name");
 
         log.debug("Resolving Fineract user for OIDC subject '{}' (username claim: '{}')", jwt.getSubject(), username);
 
-        return resolutionService.resolveOrCreate(username, email, firstName, lastName, Set.of());
+        return resolutionService.resolveOrCreate(
+                new OidcIdentity(issuer, jwt.getSubject(), username, email, emailVerified, firstName, lastName), Set.of());
     }
 
     /**
@@ -70,13 +74,16 @@ public class FineractOidcUserService {
             username = oidcUser.getSubject();
         }
 
+        String issuer = oidcUser.getIssuer() != null ? oidcUser.getIssuer().toString() : null;
         String email = oidcUser.getEmail();
+        boolean emailVerified = Boolean.TRUE.equals(oidcUser.getEmailVerified());
         String firstName = oidcUser.getGivenName();
         String lastName = oidcUser.getFamilyName();
 
         log.debug("Processing OIDC user '{}' for tenant '{}'", username, tenantId);
 
-        AppUser appUser = resolutionService.resolveOrCreate(username, email, firstName, lastName, Set.of());
+        AppUser appUser = resolutionService.resolveOrCreate(
+                new OidcIdentity(issuer, oidcUser.getSubject(), username, email, emailVerified, firstName, lastName), Set.of());
 
         Collection<? extends GrantedAuthority> authorities = appUser.getAuthorities();
         OidcIdToken idToken = oidcUser.getIdToken();
