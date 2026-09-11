@@ -45,7 +45,7 @@ public class HookIntegrationTest extends FeignIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(HookIntegrationTest.class);
 
     private static final String ECHO_WEBHOOK_BASE_URL = "http://echo-webhook.herokuapp.com:80/";
-    private static final String UPDATED_PAYLOAD_URL = "http://localhost";
+    private static final String UPDATED_PAYLOAD_URL = "https://example.com/";
     private static final String NOTIFIED_OFFICE_ID_FIELD = "officeId";
     private static final LocalDate OFFICE_OPENING_DATE = LocalDate.of(2012, Month.JANUARY, 1);
 

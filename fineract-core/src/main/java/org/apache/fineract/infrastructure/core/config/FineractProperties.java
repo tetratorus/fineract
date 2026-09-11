@@ -73,6 +73,7 @@ public class FineractProperties {
     private FineractJobProperties job;
 
     private FineractTemplateProperties template;
+    private FineractHooksProperties hooks = new FineractHooksProperties();
     private FineractJpaProperties jpa;
 
     private FineractDatabaseProperties database;
@@ -449,6 +450,26 @@ public class FineractProperties {
 
         private boolean regexWhitelistEnabled;
         private List<String> regexWhitelist;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractHooksProperties {
+
+        /**
+         * Optional allowlist of destination hosts (exact match or {@code *.example.com} wildcard) for outbound webhook
+         * requests. When empty, any public host is permitted subject to the other restrictions.
+         */
+        private List<String> allowedHosts = new ArrayList<>();
+        /**
+         * Permit webhook destinations that resolve to loopback, private, link-local or otherwise non-public addresses.
+         * Disabled by default to prevent server-side request forgery against internal services.
+         */
+        private boolean allowPrivateNetworks = false;
+        /**
+         * Permit plain {@code http://} webhook destinations in addition to {@code https://}.
+         */
+        private boolean allowInsecureHttp = true;
     }
 
     @Getter
