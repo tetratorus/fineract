@@ -234,10 +234,23 @@ public class TellerManagementReadPlatformServiceImpl implements TellerManagement
                 endDate, currencyOptions);
     }
 
+    private void validateUserHasAccessToCashier(final Long cashierId) {
+        final String sql = "select o.hierarchy from m_cashiers c join m_tellers t on t.id = c.teller_id "
+                + "join m_office o on o.id = t.office_id where c.id = ?";
+        final String cashierOfficeHierarchy;
+        try {
+            cashierOfficeHierarchy = this.jdbcTemplate.queryForObject(sql, String.class, cashierId); // NOSONAR
+        } catch (final EmptyResultDataAccessException e) {
+            throw new StaffNotFoundException(cashierId, e);
+        }
+        this.context.validateAccessRights(cashierOfficeHierarchy);
+    }
+
     @Override
     public CashierTransactionsWithSummaryData retrieveCashierTransactionsWithSummary(final Long cashierId, final boolean includeAllTellers,
             final LocalDate fromDate, final LocalDate toDate, final String currencyCode, final SearchParameters searchParameters) {
 
+        validateUserHasAccessToCashier(cashierId);
         sqlValidator.validate(searchParameters.getOrderBy());
         sqlValidator.validate(searchParameters.getSortOrder());
         final String nextDay = sqlGenerator.incrementDateByOneDay("c.end_date");
@@ -283,6 +296,7 @@ public class TellerManagementReadPlatformServiceImpl implements TellerManagement
     public Page<CashierTransactionData> retrieveCashierTransactions(final Long cashierId, final boolean includeAllTellers,
             final LocalDate fromDate, final LocalDate toDate, final String currencyCode, final SearchParameters searchParameters) {
 
+        validateUserHasAccessToCashier(cashierId);
         sqlValidator.validate(searchParameters.getOrderBy());
         sqlValidator.validate(searchParameters.getSortOrder());
         final String nextDay = sqlGenerator.incrementDateByOneDay("c.end_date");
