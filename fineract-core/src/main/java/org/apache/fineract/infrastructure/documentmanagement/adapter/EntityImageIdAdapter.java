@@ -32,6 +32,11 @@ public interface EntityImageIdAdapter {
 
     boolean accept(String entityType);
 
+    /**
+     * Permission resource type (e.g. {@code CLIENTIMAGE}) used to build {@code READ_/CREATE_/DELETE_} permission codes.
+     */
+    String permissionEntity();
+
     Optional<ImageIdResult> get(Long entityId);
 
     Optional<ImageIdResult> set(Long entityId, Long imageId);

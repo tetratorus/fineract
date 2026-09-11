@@ -55,6 +55,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -68,13 +69,17 @@ import org.apache.fineract.infrastructure.contentstore.processor.ContentProcesso
 import org.apache.fineract.infrastructure.contentstore.processor.DataUrlDecoderContentProcessor;
 import org.apache.fineract.infrastructure.contentstore.processor.DataUrlEncoderContentProcessor;
 import org.apache.fineract.infrastructure.contentstore.processor.ImageResizeContentProcessor;
+import org.apache.fineract.infrastructure.documentmanagement.adapter.EntityImageIdAdapter;
 import org.apache.fineract.infrastructure.documentmanagement.command.ImageCreateCommand;
 import org.apache.fineract.infrastructure.documentmanagement.command.ImageDeleteCommand;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageCreateRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageCreateResponse;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageDeleteRequest;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageDeleteResponse;
+import org.apache.fineract.infrastructure.documentmanagement.exception.DocumentNotFoundException;
 import org.apache.fineract.infrastructure.documentmanagement.service.ImageReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -89,6 +94,8 @@ import org.springframework.stereotype.Component;
 @Path("/v1/{entityType}/{entityId}/images")
 public class ImagesApiResource {
 
+    private final PlatformSecurityContext context;
+    private final List<EntityImageIdAdapter> imageIdAdapters;
     private final ImageReadPlatformService imageReadPlatformService;
     private final CommandDispatcher dispatcher;
     private final ImageResizeContentProcessor imageResizeContentProcessor;
@@ -105,6 +112,8 @@ public class ImagesApiResource {
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId, @QueryParam(IMAGE_API_PARAM_MAX_WIDTH) final Integer maxWidth,
             @QueryParam(IMAGE_API_PARAM_MAX_HEIGHT) final Integer maxHeight, @QueryParam(IMAGE_API_PARAM_OUTPUT) String output,
             @HeaderParam(ACCEPT) String acceptHeader) {
+
+        authenticatedUser().validateHasReadPermission(permissionEntity(entityName, entityId));
 
         // TODO: pass resize information here and do all the processing in the service
         final var content = imageReadPlatformService.retrieveImage(entityName, entityId);
@@ -163,6 +172,8 @@ public class ImagesApiResource {
             @FormDataParam(DOCUMENT_API_PARAM_FILE) final FormDataContentDisposition fileDetails,
             @FormDataParam(DOCUMENT_API_PARAM_FILE) final FormDataBodyPart filePart) {
 
+        authenticatedUser().validateHasCreatePermission(permissionEntity(entityType, entityId));
+
         fileUploadValidator.validate(fileSize, is, fileDetails, filePart);
 
         final var command = new ImageCreateCommand();
@@ -180,6 +191,8 @@ public class ImagesApiResource {
     @Consumes({ MediaType.TEXT_PLAIN, MediaType.TEXT_HTML, MediaType.APPLICATION_JSON })
     public ImageCreateResponse createImage(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId, final InputStream body) {
+
+        authenticatedUser().validateHasCreatePermission(permissionEntity(entityType, entityId));
 
         requireNonNull(body, "Missing input stream");
 
@@ -217,6 +230,8 @@ public class ImagesApiResource {
     public ImageDeleteResponse deleteImage(@PathParam(DOCUMENT_API_PARAM_ENTITY_TYPE) final String entityType,
             @PathParam(DOCUMENT_API_PARAM_ENTITY_ID) final Long entityId) {
 
+        authenticatedUser().validateHasDeletePermission(permissionEntity(entityType, entityId));
+
         final var command = new ImageDeleteCommand();
 
         command.setPayload(ImageDeleteRequest.builder().entityId(entityId).entityType(entityType).build());
@@ -224,5 +239,15 @@ public class ImagesApiResource {
         final Supplier<ImageDeleteResponse> response = dispatcher.dispatch(command);
 
         return response.get();
+    }
+
+    private AppUser authenticatedUser() {
+        return context.authenticatedUser();
+    }
+
+    private String permissionEntity(final String entityType, final Long entityId) {
+        return imageIdAdapters.stream().filter(imageIdAdapter -> imageIdAdapter.accept(entityType)).findFirst()
+                .map(EntityImageIdAdapter::permissionEntity)
+                .orElseThrow(() -> new DocumentNotFoundException(entityType, entityId, -1L));
     }
 }
