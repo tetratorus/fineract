@@ -21,10 +21,23 @@ package org.apache.fineract.cob.api;
 import jakarta.ws.rs.core.Response;
 import org.apache.fineract.cob.data.OldestCOBProcessedLoanDTO;
 import org.apache.fineract.cob.service.COBCatchUpService;
+import org.apache.fineract.infrastructure.jobs.api.SchedulerJobApiConstants;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 
 public final class COBCatchUpExecutorHelper {
 
     private COBCatchUpExecutorHelper() {}
+
+    public static void validateHasReadPermission(PlatformSecurityContext context) {
+        context.authenticatedUser().validateHasReadPermission(SchedulerJobApiConstants.SCHEDULER_RESOURCE_NAME);
+    }
+
+    public static void validateHasExecutePermission(PlatformSecurityContext context) {
+        if (context.authenticatedUser().hasNotPermissionForAnyOf("ALL_FUNCTIONS", "EXECUTEJOB_SCHEDULER")) {
+            throw new NoAuthorizationException("User has no authority to execute COB catch up");
+        }
+    }
 
     public static Response executeLoanCOBCatchUp(COBCatchUpService loanCOBCatchUpService) {
         if (loanCOBCatchUpService.isCatchUpRunning().isCatchUpRunning()) {
