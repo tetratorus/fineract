@@ -41,7 +41,8 @@ import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
+import org.apache.fineract.infrastructure.security.service.InputValidator;
 import org.apache.fineract.organisation.office.data.OfficeData;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
@@ -68,7 +69,7 @@ import org.springframework.util.CollectionUtils;
 public class StandingInstructionReadPlatformServiceImpl implements StandingInstructionReadPlatformService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final ColumnValidator columnValidator;
+    private final InputValidator inputValidator;
     private final ClientReadPlatformService clientReadPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
     private final PortfolioAccountReadPlatformService portfolioAccountReadPlatformService;
@@ -84,7 +85,7 @@ public class StandingInstructionReadPlatformServiceImpl implements StandingInstr
     public StandingInstructionReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate,
             final ClientReadPlatformService clientReadPlatformService, final OfficeReadPlatformService officeReadPlatformService,
             final PortfolioAccountReadPlatformService portfolioAccountReadPlatformService,
-            final DropdownReadPlatformService dropdownReadPlatformService, final ColumnValidator columnValidator,
+            final DropdownReadPlatformService dropdownReadPlatformService, final InputValidator inputValidator,
             DatabaseSpecificSQLGenerator sqlGenerator, PaginationHelper paginationHelper) {
         this.jdbcTemplate = jdbcTemplate;
         this.clientReadPlatformService = clientReadPlatformService;
@@ -93,7 +94,7 @@ public class StandingInstructionReadPlatformServiceImpl implements StandingInstr
         this.dropdownReadPlatformService = dropdownReadPlatformService;
         this.sqlGenerator = sqlGenerator;
         this.standingInstructionMapper = new StandingInstructionMapper();
-        this.columnValidator = columnValidator;
+        this.inputValidator = inputValidator;
         this.paginationHelper = paginationHelper;
     }
 
@@ -307,11 +308,15 @@ public class StandingInstructionReadPlatformServiceImpl implements StandingInstr
 
         final SearchParameters searchParameters = standingInstructionDTO.searchParameters();
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            final String orderBy = searchParameters.getOrderBy();
+            this.inputValidator.validate("standing-instruction-order-by", orderBy);
+            sqlBuilder.append(" order by ").append(orderBy);
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
+                final String sortOrder = searchParameters.getSortOrder();
+                if (!"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+                    throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+                }
+                sqlBuilder.append(' ').append(sortOrder);
             }
         }
 
