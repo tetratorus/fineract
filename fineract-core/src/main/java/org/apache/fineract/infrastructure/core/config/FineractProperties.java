@@ -595,6 +595,9 @@ public class FineractProperties {
             // Used when the master DB has no m_tenant_oidc_config record for an incoming issuer.
             // Priority: DB config > issuers[] > tenantClaimName claim.
             private List<OidcIssuerProperties> issuers = new ArrayList<>();
+            // Tenant whose MANAGE_TENANT_OIDC_CONFIG holders may manage the OIDC config of *other* tenants.
+            // When blank (default), the OIDC Config API only accepts the caller's own tenant.
+            private String platformAdminTenant;
 
             @Getter
             @Setter
