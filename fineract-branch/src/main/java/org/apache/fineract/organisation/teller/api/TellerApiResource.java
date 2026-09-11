@@ -57,6 +57,7 @@ import org.apache.fineract.organisation.teller.domain.model.CashiersForTeller;
 import org.apache.fineract.organisation.teller.domain.model.request.CashierRequest;
 import org.apache.fineract.organisation.teller.domain.model.request.CashierTransactionRequest;
 import org.apache.fineract.organisation.teller.domain.model.request.TellerRequest;
+import org.apache.fineract.organisation.teller.exception.CashierNotFoundException;
 import org.apache.fineract.organisation.teller.service.TellerManagementReadPlatformService;
 import org.springframework.stereotype.Component;
 
@@ -157,7 +158,7 @@ public class TellerApiResource {
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = TellerApiResourceSwagger.GetTellersTellerIdCashiersCashierIdResponse.class)))
     public CashierData findCashierData(@PathParam("tellerId") @Parameter(description = "tellerId") final Long tellerId,
             @PathParam("cashierId") @Parameter(description = "cashierId") final Long cashierId) {
-        return readPlatformService.findCashier(cashierId);
+        return findCashierForTeller(tellerId, cashierId);
     }
 
     @GET
@@ -279,6 +280,7 @@ public class TellerApiResource {
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
 
+        findCashierForTeller(tellerId, cashierId);
         final SearchParameters searchParameters = SearchParameters.builder().limit(limit).offset(offset).orderBy(orderBy)
                 .sortOrder(sortOrder).build();
         return this.readPlatformService.retrieveCashierTransactions(cashierId, false, null, null, currencyCode, searchParameters);
@@ -299,6 +301,7 @@ public class TellerApiResource {
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
 
+        findCashierForTeller(tellerId, cashierId);
         final SearchParameters searchParameters = SearchParameters.builder().limit(limit).offset(offset).orderBy(orderBy)
                 .sortOrder(sortOrder).build();
 
@@ -314,8 +317,16 @@ public class TellerApiResource {
     @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = TellerApiResourceSwagger.GetTellersTellerIdCashiersCashiersIdTransactionsTemplateResponse.class)))
     public CashierTransactionData getCashierTxnTemplate(@PathParam("tellerId") @Parameter(description = "tellerId") final Long tellerId,
             @PathParam("cashierId") @Parameter(description = "cashierId") final Long cashierId) {
-
+        findCashierForTeller(tellerId, cashierId);
         return this.readPlatformService.retrieveCashierTxnTemplate(cashierId);
+    }
+
+    private CashierData findCashierForTeller(final Long tellerId, final Long cashierId) {
+        final CashierData cashier = this.readPlatformService.findCashier(cashierId);
+        if (cashier.getTellerId() == null || !cashier.getTellerId().equals(tellerId)) {
+            throw new CashierNotFoundException(cashierId);
+        }
+        return cashier;
     }
 
 }
