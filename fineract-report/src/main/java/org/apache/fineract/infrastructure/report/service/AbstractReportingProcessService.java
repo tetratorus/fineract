@@ -30,6 +30,7 @@ import org.apache.fineract.infrastructure.security.service.InputValidator;
 public abstract class AbstractReportingProcessService implements ReportingProcessService {
 
     private static final String NUMERIC_FORMAT_TYPE = "number";
+    private static final String INTEGER_FORMAT_TYPE = "integer";
     private static final String DATE_FORMAT_TYPE = "date";
 
     private final InputValidator inputValidator;
@@ -73,6 +74,8 @@ public abstract class AbstractReportingProcessService implements ReportingProces
     private void validateParamByType(final String paramName, final String value, final String formatType) {
         if (NUMERIC_FORMAT_TYPE.equalsIgnoreCase(formatType)) {
             inputValidator.validate(NUMERIC_FORMAT_TYPE, value);
+        } else if (INTEGER_FORMAT_TYPE.equalsIgnoreCase(formatType)) {
+            inputValidator.validate(INTEGER_FORMAT_TYPE, value);
         } else if (DATE_FORMAT_TYPE.equalsIgnoreCase(formatType)) {
             inputValidator.validate(DATE_FORMAT_TYPE, value);
         }
