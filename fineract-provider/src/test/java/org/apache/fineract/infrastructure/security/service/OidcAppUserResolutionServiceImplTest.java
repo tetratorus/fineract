@@ -30,6 +30,7 @@ import java.util.Set;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.security.data.OidcIdentity;
 import org.apache.fineract.infrastructure.security.exception.OidcUserNotFoundException;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -90,36 +92,108 @@ class OidcAppUserResolutionServiceImplTest {
         ThreadLocalContextUtil.reset();
     }
 
-    @Test
-    void returnsExistingUserFoundByUsername() {
-        when(appUserRepository.findAppUserByName("alice")).thenReturn(existingUser);
+    private static final String ISSUER = "https://idp.example.com/realms/test";
 
-        AppUser result = service.resolveOrCreate("alice", "alice@example.com", "Alice", "Smith", Set.of());
+    private static OidcIdentity identity(String subject, String username, String email, boolean emailVerified) {
+        return new OidcIdentity(ISSUER, subject, username, email, emailVerified, "First", "Last");
+    }
+
+    @Test
+    void returnsUserBoundToIssuerAndSubject() {
+        when(appUserRepository.findByOidcIdentity(ISSUER, "sub-1")).thenReturn(existingUser);
+
+        AppUser result = service.resolveOrCreate(identity("sub-1", "alice", "alice@example.com", true), Set.of());
 
         assertThat(result).isSameAs(existingUser);
+        verify(appUserRepository, never()).findAppUserByName(any());
         verify(appUserRepository, never()).findActiveUserByEmail(any());
         verify(appUserRepository, never()).saveAndFlush(any());
     }
 
     @Test
-    void fallsBackToEmailWhenUsernameNotFound() {
-        when(appUserRepository.findAppUserByName("alice")).thenReturn(null);
-        when(appUserRepository.findActiveUserByEmail("alice@example.com")).thenReturn(existingUser);
+    void neverLinksExistingAccountByUsernameClaim() {
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
+        when(appUserRepository.findAppUserByName("mifos")).thenReturn(existingUser);
+        when(oidcProps.isAutoCreateUser()).thenReturn(false);
 
-        AppUser result = service.resolveOrCreate("alice", "alice@example.com", "Alice", "Smith", Set.of());
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("attacker-sub", "mifos", null, false), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
 
-        assertThat(result).isSameAs(existingUser);
+        verify(existingUser, never()).bindOidcIdentity(any(), any());
         verify(appUserRepository, never()).saveAndFlush(any());
     }
 
     @Test
+    void linksByEmailOnlyWhenEmailVerifiedAndBindsIdentity() {
+        when(appUserRepository.findByOidcIdentity(ISSUER, "sub-1")).thenReturn(null);
+        when(appUserRepository.findActiveUserByEmail("alice@example.com")).thenReturn(existingUser);
+        when(existingUser.hasOidcIdentity()).thenReturn(false);
+        when(existingUser.isSystemUser()).thenReturn(false);
+        when(appUserRepository.saveAndFlush(existingUser)).thenReturn(existingUser);
+
+        AppUser result = service.resolveOrCreate(identity("sub-1", "alice", "alice@example.com", true), Set.of());
+
+        assertThat(result).isSameAs(existingUser);
+        verify(existingUser).bindOidcIdentity(ISSUER, "sub-1");
+        verify(appUserRepository).saveAndFlush(existingUser);
+    }
+
+    @Test
+    void doesNotLinkByUnverifiedEmail() {
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
+        when(oidcProps.isAutoCreateUser()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("sub-1", "alice", "admin@example.com", false), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(appUserRepository, never()).findActiveUserByEmail(any());
+        verify(appUserRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void doesNotLinkByEmailToAlreadyBoundAccount() {
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
+        when(appUserRepository.findActiveUserByEmail("alice@example.com")).thenReturn(existingUser);
+        when(existingUser.hasOidcIdentity()).thenReturn(true);
+        when(oidcProps.isAutoCreateUser()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("other-sub", "alice", "alice@example.com", true), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(existingUser, never()).bindOidcIdentity(any(), any());
+    }
+
+    @Test
+    void doesNotLinkByEmailToSystemUser() {
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
+        when(appUserRepository.findActiveUserByEmail("system@example.com")).thenReturn(existingUser);
+        when(existingUser.hasOidcIdentity()).thenReturn(false);
+        when(existingUser.isSystemUser()).thenReturn(true);
+        when(oidcProps.isAutoCreateUser()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("sub-1", "system", "system@example.com", true), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(existingUser, never()).bindOidcIdentity(any(), any());
+    }
+
+    @Test
+    void rejectsTokenWithoutIssuerOrSubject() {
+        assertThatThrownBy(() -> service.resolveOrCreate(new OidcIdentity(null, "sub-1", "alice", null, false, "A", "B"), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+        assertThatThrownBy(() -> service.resolveOrCreate(new OidcIdentity(ISSUER, "", "alice", null, false, "A", "B"), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(appUserRepository, never()).findByOidcIdentity(any(), any());
+    }
+
+    @Test
     void throwsOidcUserNotFoundWhenUserMissingAndAutoCreateDisabled() {
-        when(appUserRepository.findAppUserByName("ghost")).thenReturn(null);
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
         when(appUserRepository.findActiveUserByEmail("ghost@example.com")).thenReturn(null);
         when(oidcProps.isAutoCreateUser()).thenReturn(false);
 
-        assertThatThrownBy(() ->
-                service.resolveOrCreate("ghost", "ghost@example.com", "Ghost", "User", Set.of()))
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("sub-ghost", "ghost", "ghost@example.com", true), Set.of()))
                 .isInstanceOf(OidcUserNotFoundException.class)
                 .extracting(e -> ((OidcUserNotFoundException) e).getSubject())
                 .isEqualTo("ghost");
@@ -127,8 +201,9 @@ class OidcAppUserResolutionServiceImplTest {
 
     @Test
     void autoCreatesUserWhenEnabledAndUserNotFound() {
-        when(appUserRepository.findAppUserByName("newuser")).thenReturn(null);
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
         when(appUserRepository.findActiveUserByEmail("new@example.com")).thenReturn(null);
+        when(appUserRepository.findAppUserByName("newuser")).thenReturn(null);
         when(oidcProps.isAutoCreateUser()).thenReturn(true);
         when(oidcProps.getDefaultRoles()).thenReturn("");
         when(officeRepository.findById(1L)).thenReturn(Optional.of(headOffice));
@@ -136,34 +211,37 @@ class OidcAppUserResolutionServiceImplTest {
         AppUser savedUser = org.mockito.Mockito.mock(AppUser.class);
         when(appUserRepository.saveAndFlush(any(AppUser.class))).thenReturn(savedUser);
 
-        AppUser result = service.resolveOrCreate("newuser", "new@example.com", "New", "User", Set.of());
+        AppUser result = service.resolveOrCreate(identity("sub-new", "newuser", "new@example.com", true), Set.of());
 
         assertThat(result).isSameAs(savedUser);
-        verify(appUserRepository).saveAndFlush(any(AppUser.class));
+        ArgumentCaptor<AppUser> captor = ArgumentCaptor.forClass(AppUser.class);
+        verify(appUserRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getOidcIssuer()).isEqualTo(ISSUER);
+        assertThat(captor.getValue().getOidcSubject()).isEqualTo("sub-new");
+    }
+
+    @Test
+    void refusesAutoCreateWhenUsernameAlreadyTaken() {
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
+        when(appUserRepository.findAppUserByName("mifos")).thenReturn(existingUser);
+        when(oidcProps.isAutoCreateUser()).thenReturn(true);
+
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("attacker-sub", "mifos", null, false), Set.of()))
+                .isInstanceOf(OidcUserNotFoundException.class);
+
+        verify(appUserRepository, never()).saveAndFlush(any());
     }
 
     @Test
     void throwsWhenHeadOfficeNotFoundDuringAutoCreate() {
-        when(appUserRepository.findAppUserByName("newuser")).thenReturn(null);
+        when(appUserRepository.findByOidcIdentity(any(), any())).thenReturn(null);
         when(appUserRepository.findActiveUserByEmail(any())).thenReturn(null);
+        when(appUserRepository.findAppUserByName("newuser")).thenReturn(null);
         when(oidcProps.isAutoCreateUser()).thenReturn(true);
         when(officeRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                service.resolveOrCreate("newuser", "new@example.com", "New", "User", Set.of()))
+        assertThatThrownBy(() -> service.resolveOrCreate(identity("sub-new", "newuser", "new@example.com", true), Set.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Head office");
-    }
-
-    @Test
-    void skipsEmailLookupWhenEmailIsNull() {
-        when(appUserRepository.findAppUserByName("alice")).thenReturn(null);
-        when(oidcProps.isAutoCreateUser()).thenReturn(false);
-
-        assertThatThrownBy(() ->
-                service.resolveOrCreate("alice", null, "Alice", "Smith", Set.of()))
-                .isInstanceOf(OidcUserNotFoundException.class);
-
-        verify(appUserRepository, never()).findActiveUserByEmail(any());
     }
 }

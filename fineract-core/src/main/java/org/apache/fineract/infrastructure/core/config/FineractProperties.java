@@ -580,7 +580,8 @@ public class FineractProperties {
             // JWT claim name used to resolve the Fineract tenant ID.
             // Falls back to HTTP header / query param if absent.
             private String tenantClaimName = "fineract_tenant";
-            // Claim used as the Fineract username. Common values: preferred_username, email, sub.
+            // Claim used as the Fineract username for auto-created users. Common values: preferred_username, email, sub.
+            // Existing users are resolved by their bound (issuer, sub) identity, never by this claim.
             private String usernameClaim = "preferred_username";
             // When true, creates a Fineract AppUser on first successful OIDC login.
             private boolean autoCreateUser = false;
