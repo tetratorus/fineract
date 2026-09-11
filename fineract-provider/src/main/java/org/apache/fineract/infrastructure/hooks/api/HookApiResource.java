@@ -38,6 +38,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
+import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
@@ -54,6 +55,7 @@ import org.apache.fineract.infrastructure.hooks.data.HookDetailsData;
 import org.apache.fineract.infrastructure.hooks.data.HookUpdateRequest;
 import org.apache.fineract.infrastructure.hooks.data.HookUpdateResponse;
 import org.apache.fineract.infrastructure.hooks.service.HookReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Component;
 
 @Path("/v1/hooks")
@@ -64,13 +66,19 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HookApiResource {
 
+    private static final List<String> READ_HOOK_PERMISSIONS = List.of("ALL_FUNCTIONS", "ALL_FUNCTIONS_READ", "READ_HOOK");
+    private static final List<String> CREATE_HOOK_PERMISSIONS = List.of("ALL_FUNCTIONS", "ALL_FUNCTIONS_WRITE", "CREATE_HOOK");
+
     private final HookReadPlatformService readPlatformService;
     private final CommandDispatcher dispatcher;
+    private final PlatformSecurityContext context;
 
     @GET
     @Operation(summary = "Retrieve Hooks", operationId = "retrieveAllHooks", description = "Returns the list of hooks")
     @AlternativeOperationId("retrieveHooks")
     public Collection<HookData> retrieveHooks(@Context final UriInfo uriInfo) {
+        context.authenticatedUser().validateHasPermissionTo("READ_HOOK", READ_HOOK_PERMISSIONS);
+
         return readPlatformService.retrieveAllHooks();
     }
 
@@ -103,6 +111,8 @@ public class HookApiResource {
     @POST
     @Operation(summary = "Create a Hook", operationId = "createHook", description = "")
     public HookCreateResponse createHook(@Valid final HookCreateRequest request) {
+        context.authenticatedUser().validateHasPermissionTo("CREATE_HOOK", CREATE_HOOK_PERMISSIONS);
+
         final var command = new HookCreateCommand();
         command.setPayload(request);
 
