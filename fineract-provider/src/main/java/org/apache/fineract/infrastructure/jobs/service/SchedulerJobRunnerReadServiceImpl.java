@@ -33,6 +33,8 @@ import org.apache.fineract.infrastructure.jobs.data.JobDetailHistoryData;
 import org.apache.fineract.infrastructure.jobs.domain.ScheduledJobDetailRepository;
 import org.apache.fineract.infrastructure.jobs.exception.JobNotFoundException;
 import org.apache.fineract.infrastructure.jobs.exception.OperationNotAllowedException;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
+import org.apache.fineract.infrastructure.security.service.InputValidator;
 import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -48,6 +50,7 @@ public class SchedulerJobRunnerReadServiceImpl implements SchedulerJobRunnerRead
 
     private final JdbcTemplate jdbcTemplate;
     private final ColumnValidator columnValidator;
+    private final InputValidator inputValidator;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final ScheduledJobDetailRepository jobDetailRepository;
 
@@ -55,10 +58,11 @@ public class SchedulerJobRunnerReadServiceImpl implements SchedulerJobRunnerRead
 
     @Autowired
     public SchedulerJobRunnerReadServiceImpl(final JdbcTemplate jdbcTemplate, final ColumnValidator columnValidator,
-            DatabaseSpecificSQLGenerator sqlGenerator, ScheduledJobDetailRepository jobDetailRepository,
-            PaginationHelper paginationHelper) {
+            final InputValidator inputValidator, DatabaseSpecificSQLGenerator sqlGenerator,
+            ScheduledJobDetailRepository jobDetailRepository, PaginationHelper paginationHelper) {
         this.jdbcTemplate = jdbcTemplate;
         this.columnValidator = columnValidator;
+        this.inputValidator = inputValidator;
         this.sqlGenerator = sqlGenerator;
         this.jobDetailRepository = jobDetailRepository;
         this.paginationHelper = paginationHelper;
@@ -106,11 +110,16 @@ public class SchedulerJobRunnerReadServiceImpl implements SchedulerJobRunnerRead
         }
         sqlBuilder.append(" = ?");
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            final String orderBy = searchParameters.getOrderBy();
+            this.inputValidator.validate("order-by", orderBy);
+            sqlBuilder.append(" order by ").append(orderBy);
+            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), orderBy);
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
+                final String sortOrder = searchParameters.getSortOrder();
+                if (!"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+                    throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+                }
+                sqlBuilder.append(' ').append(sortOrder);
             }
         }
 
