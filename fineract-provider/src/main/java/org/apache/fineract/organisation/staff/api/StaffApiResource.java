@@ -47,6 +47,7 @@ import org.apache.fineract.command.core.CommandDispatcher;
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.infrastructure.bulkimport.service.BulkImportWorkbookPopulatorService;
 import org.apache.fineract.infrastructure.core.annotation.AlternativeOperationId;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.office.data.OfficeData;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.apache.fineract.organisation.staff.command.StaffCreateCommand;
@@ -71,6 +72,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class StaffApiResource {
 
+    private static final String RESOURCE_NAME_FOR_PERMISSIONS = "STAFF";
+
+    private final PlatformSecurityContext context;
     private final StaffReadService readPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
@@ -95,6 +99,8 @@ public class StaffApiResource {
             @DefaultValue("false") @QueryParam("staffInOfficeHierarchy") @Parameter(description = "staffInOfficeHierarchy") final boolean staffInOfficeHierarchy,
             @DefaultValue("false") @QueryParam("loanOfficersOnly") @Parameter(description = "loanOfficersOnly") final boolean loanOfficersOnly,
             @DefaultValue("active") @QueryParam("status") @Parameter(description = "status") final String status) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         return staffInOfficeHierarchy ? readPlatformService.retrieveAllStaffInOfficeAndItsParentOfficeHierarchy(officeId, loanOfficersOnly)
                 : readPlatformService.retrieveAllStaff(officeId, loanOfficersOnly, Optional.ofNullable(status).orElse("active"));
     }
@@ -111,6 +117,8 @@ public class StaffApiResource {
     @AlternativeOperationId("retrieveOne_8")
     public StaffData retrieveOne(@PathParam("staffId") @Parameter(description = "staffId") final Long staffId,
             @DefaultValue("false") @QueryParam("template") @Parameter(description = "template", hidden = true) boolean template) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+
         StaffData staff = readPlatformService.retrieveStaff(staffId);
 
         if (template) {
