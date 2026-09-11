@@ -43,6 +43,7 @@ import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSer
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentData;
 import org.apache.fineract.infrastructure.documentmanagement.exception.DocumentNotFoundException;
 import org.apache.fineract.infrastructure.documentmanagement.service.DocumentReadPlatformService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.util.StreamResponseUtil;
 import org.springframework.stereotype.Component;
 
@@ -52,6 +53,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BulkImportApiResource {
 
+    private static final String RESOURCE_NAME_FOR_PERMISSIONS = "IMPORT";
+
+    private final PlatformSecurityContext context;
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final DocumentReadPlatformService documentReadPlatformService;
     private final DefaultToApiJsonSerializer<ImportData> toApiJsonSerializer;
@@ -60,6 +64,7 @@ public class BulkImportApiResource {
     @GET
     @Produces({ MediaType.APPLICATION_JSON })
     public String retrieveImportDocuments(@Context final UriInfo uriInfo, @QueryParam("entityType") final String entityType) {
+        this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         Collection<ImportData> importData = new ArrayList<>();
 
         if (entityType.equals(GlobalEntityType.CLIENT.getCode())) {
@@ -89,6 +94,7 @@ public class BulkImportApiResource {
     @GET
     @Path("getOutputTemplateLocation")
     public String retriveOutputTemplateLocation(@QueryParam("importDocumentId") final Long importDocumentId) {
+        this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final var imporData = bulkImportWorkbookService.getImport(importDocumentId);
 
         return Optional.ofNullable(imporData)
@@ -100,6 +106,7 @@ public class BulkImportApiResource {
     @Path("downloadOutputTemplate")
     @Produces("application/vnd.ms-excel")
     public Response getOutputTemplate(@QueryParam("importDocumentId") final Long importDocumentId) {
+        this.context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         final var importData = bulkImportWorkbookService.getImport(importDocumentId);
         if (importData == null) {
             throw new DocumentNotFoundException("IMPORT", importDocumentId, -1L);

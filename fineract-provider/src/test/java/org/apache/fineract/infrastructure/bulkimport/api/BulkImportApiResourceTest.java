@@ -19,6 +19,7 @@
 package org.apache.fineract.infrastructure.bulkimport.api;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,10 @@ import org.apache.fineract.infrastructure.documentmanagement.data.DocumentConten
 import org.apache.fineract.infrastructure.documentmanagement.data.DocumentData;
 import org.apache.fineract.infrastructure.documentmanagement.exception.DocumentNotFoundException;
 import org.apache.fineract.infrastructure.documentmanagement.service.DocumentReadPlatformService;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.useradministration.domain.AppUser;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -40,6 +45,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class BulkImportApiResourceTest {
+
+    @Mock
+    private PlatformSecurityContext context;
+
+    @Mock
+    private AppUser appUser;
 
     @Mock
     private BulkImportWorkbookService bulkImportWorkbookService;
@@ -55,6 +66,38 @@ class BulkImportApiResourceTest {
 
     @InjectMocks
     private BulkImportApiResource underTest;
+
+    @BeforeEach
+    void setUp() {
+        when(context.authenticatedUser()).thenReturn(appUser);
+    }
+
+    @Test
+    void getOutputTemplate_withoutReadImportPermission_throwsNoAuthorizationException() {
+        doThrow(new NoAuthorizationException("no permission")).when(appUser).validateHasReadPermission("IMPORT");
+
+        assertThatThrownBy(() -> underTest.getOutputTemplate(2L)).isInstanceOf(NoAuthorizationException.class);
+
+        verifyNoInteractions(bulkImportWorkbookService, documentReadPlatformService);
+    }
+
+    @Test
+    void retriveOutputTemplateLocation_withoutReadImportPermission_throwsNoAuthorizationException() {
+        doThrow(new NoAuthorizationException("no permission")).when(appUser).validateHasReadPermission("IMPORT");
+
+        assertThatThrownBy(() -> underTest.retriveOutputTemplateLocation(2L)).isInstanceOf(NoAuthorizationException.class);
+
+        verifyNoInteractions(bulkImportWorkbookService, documentReadPlatformService);
+    }
+
+    @Test
+    void retrieveImportDocuments_withoutReadImportPermission_throwsNoAuthorizationException() {
+        doThrow(new NoAuthorizationException("no permission")).when(appUser).validateHasReadPermission("IMPORT");
+
+        assertThatThrownBy(() -> underTest.retrieveImportDocuments(null, "clients")).isInstanceOf(NoAuthorizationException.class);
+
+        verifyNoInteractions(bulkImportWorkbookService, documentReadPlatformService);
+    }
 
     @Test
     void getOutputTemplate_success() {
@@ -75,6 +118,7 @@ class BulkImportApiResourceTest {
 
         underTest.getOutputTemplate(importDocumentId);
 
+        verify(appUser).validateHasReadPermission("IMPORT");
         verify(bulkImportWorkbookService).getImport(importDocumentId);
         verify(documentReadPlatformService).retrieveDocument(documentId);
         verify(documentReadPlatformService).retrieveDocumentContent("IMPORT", 1L, documentId);
