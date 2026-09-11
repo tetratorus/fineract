@@ -20,9 +20,8 @@ package org.apache.fineract.infrastructure.configuration.service;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.campaigns.sms.data.MessageGatewayConfigurationData;
 import org.apache.fineract.infrastructure.configuration.data.ExternalServicesPropertiesData;
@@ -102,20 +101,16 @@ public class ExternalServicesPropertiesReadPlatformServiceImpl implements Extern
 
     private static final class ExternalServiceMapper implements RowMapper<ExternalServicesPropertiesData> {
 
-        List<String> secretAttributes;
-
-        ExternalServiceMapper() {
-            secretAttributes = new ArrayList<>();
-            secretAttributes.add("password");
-            secretAttributes.add("server_key");
-        }
+        private static final Set<String> SECRET_ATTRIBUTES = Set.of(ExternalServicesConstants.SMTP_PASSWORD,
+                ExternalServicesConstants.NOTIFICATION_SERVER_KEY, ExternalServicesConstants.S3_ACCESS_KEY,
+                ExternalServicesConstants.S3_SECRET_KEY, ExternalServicesConstants.SMS_TENANT_APP_KEY);
 
         @Override
         public ExternalServicesPropertiesData mapRow(ResultSet rs, @SuppressWarnings("unused") int rowNum) throws SQLException {
             final String name = rs.getString("name");
             String value = rs.getString("value");
-            // Masking the password as we should not send the password back
-            if (name != null && secretAttributes.contains(name)) {
+            // Masking secrets as we should not send them back
+            if (name != null && value != null && SECRET_ATTRIBUTES.contains(name)) {
                 value = StringUtil.maskValue(value);
             }
             return new ExternalServicesPropertiesData().setName(name).setValue(value);
