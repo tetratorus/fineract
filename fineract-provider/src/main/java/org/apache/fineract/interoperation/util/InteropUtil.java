@@ -34,6 +34,8 @@ public final class InteropUtil {
     public static final String ROOT_PATH = "interoperation";
     public static final String DEFAULT_ROUTING_CODE = "INTEROPERATION";
 
+    public static final String ENTITY_NAME_ACCOUNT = "INTERACCOUNT";
+    public static final String ENTITY_NAME_KYC = "INTERKYC";
     public static final String ENTITY_NAME_IDENTIFIER = "INTERID";
     public static final String ENTITY_NAME_REQUEST = "INTERREQUEST";
     public static final String ENTITY_NAME_QUOTE = "INTERQUOTE";

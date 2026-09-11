@@ -28,6 +28,7 @@ import org.apache.fineract.interoperation.serialization.InteropDataValidator;
 import org.apache.fineract.interoperation.service.InteropService;
 import org.apache.fineract.interoperation.service.InteropServiceImpl;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepository;
+import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.data.LoanAccountData;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
@@ -51,14 +52,14 @@ public class InteroperationConfiguration {
             SavingsAccountRepository savingsAccountRepository, SavingsAccountTransactionRepository savingsAccountTransactionRepository,
             ApplicationCurrencyRepository applicationCurrencyRepository, NoteRepository noteRepository,
             PaymentTypeRepository paymentTypeRepository, InteropIdentifierRepository identifierRepository,
-            LoanRepositoryWrapper loanRepositoryWrapper, SavingsHelper savingsHelper,
+            LoanRepositoryWrapper loanRepositoryWrapper, OfficeRepositoryWrapper officeRepositoryWrapper, SavingsHelper savingsHelper,
             SavingsAccountTransactionSummaryWrapper savingsAccountTransactionSummaryWrapper,
             SavingsAccountDomainService savingsAccountService, ConfigurationDomainService configurationDomainService,
             JdbcTemplate jdbcTemplate, PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService,
             DefaultToApiJsonSerializer<LoanAccountData> toApiJsonSerializer, DatabaseSpecificSQLGenerator sqlGenerator) {
         return new InteropServiceImpl(securityContext, interopDataValidator, savingsAccountRepository, savingsAccountTransactionRepository,
                 applicationCurrencyRepository, noteRepository, paymentTypeRepository, identifierRepository, loanRepositoryWrapper,
-                savingsHelper, savingsAccountTransactionSummaryWrapper, savingsAccountService, configurationDomainService, jdbcTemplate,
-                commandsSourceWritePlatformService, toApiJsonSerializer, sqlGenerator);
+                officeRepositoryWrapper, savingsHelper, savingsAccountTransactionSummaryWrapper, savingsAccountService,
+                configurationDomainService, jdbcTemplate, commandsSourceWritePlatformService, toApiJsonSerializer, sqlGenerator);
     }
 }

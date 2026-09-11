@@ -54,6 +54,7 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.interoperation.data.InteropAccountData;
 import org.apache.fineract.interoperation.data.InteropIdentifierAccountResponseData;
@@ -86,6 +87,8 @@ import org.apache.fineract.organisation.monetary.domain.ApplicationCurrency;
 import org.apache.fineract.organisation.monetary.domain.ApplicationCurrencyRepository;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
+import org.apache.fineract.organisation.office.domain.Office;
+import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.apache.fineract.portfolio.account.exception.DifferentCurrenciesException;
 import org.apache.fineract.portfolio.loanaccount.data.LoanAccountData;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
@@ -130,6 +133,7 @@ public class InteropServiceImpl implements InteropService {
     private final PaymentTypeRepository paymentTypeRepository;
     private final InteropIdentifierRepository identifierRepository;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
+    private final OfficeRepositoryWrapper officeRepositoryWrapper;
 
     private final SavingsHelper savingsHelper;
     private final SavingsAccountTransactionSummaryWrapper savingsAccountTransactionSummaryWrapper;
@@ -261,6 +265,8 @@ public class InteropServiceImpl implements InteropService {
         if (identifier == null) {
             throw new InteropAccountNotFoundException(idType, idValue, subIdOrType);
         }
+
+        validateAccountAccess(identifier.getAccount());
 
         return InteropIdentifierAccountResponseData.build(identifier.getId(), identifier.getAccount().getExternalId().getValue());
     }
@@ -554,7 +560,16 @@ public class InteropServiceImpl implements InteropService {
         if (savingsAccount == null) {
             throw new SavingsAccountNotFoundException(accountId);
         }
+        validateAccountAccess(savingsAccount);
         return savingsAccount;
+    }
+
+    private void validateAccountAccess(SavingsAccount savingsAccount) {
+        Long accountOfficeId = savingsAccount.officeId();
+        Office userOffice = officeRepositoryWrapper.findOfficeHierarchy(securityContext.authenticatedUser().getOffice().getId());
+        if (accountOfficeId == null || userOffice.doesNotHaveAnOfficeInHierarchyWithId(accountOfficeId)) {
+            throw new NoAuthorizationException("User does not have sufficient privileges to access the provided account.");
+        }
     }
 
     private Loan validateAndGetLoan(String accountId) {
