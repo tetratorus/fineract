@@ -29,7 +29,8 @@ import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.reportmailingjob.data.ReportMailingJobRunHistoryData;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
+import org.apache.fineract.infrastructure.security.exception.InputValidationException;
+import org.apache.fineract.infrastructure.security.service.InputValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -41,16 +42,16 @@ public class ReportMailingJobRunHistoryReadPlatformServiceImpl implements Report
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final ReportMailingJobRunHistoryMapper reportMailingJobRunHistoryMapper;
-    private final ColumnValidator columnValidator;
+    private final InputValidator inputValidator;
     private final PaginationHelper paginationHelper;
 
     @Autowired
-    public ReportMailingJobRunHistoryReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate, final ColumnValidator columnValidator,
+    public ReportMailingJobRunHistoryReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate, final InputValidator inputValidator,
             DatabaseSpecificSQLGenerator sqlGenerator, PaginationHelper paginationHelper) {
         this.jdbcTemplate = jdbcTemplate;
         this.sqlGenerator = sqlGenerator;
         this.reportMailingJobRunHistoryMapper = new ReportMailingJobRunHistoryMapper();
-        this.columnValidator = columnValidator;
+        this.inputValidator = inputValidator;
         this.paginationHelper = paginationHelper;
     }
 
@@ -69,11 +70,15 @@ public class ReportMailingJobRunHistoryReadPlatformServiceImpl implements Report
         }
 
         if (searchParameters.hasOrderBy()) {
-            sqlStringBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlStringBuilder.toString(), searchParameters.getOrderBy());
+            final String orderBy = searchParameters.getOrderBy();
+            this.inputValidator.validate("report-mailing-job-run-history-order-by", orderBy);
+            sqlStringBuilder.append(" order by ").append(orderBy);
             if (searchParameters.hasSortOrder()) {
-                sqlStringBuilder.append(" ").append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlStringBuilder.toString(), searchParameters.getSortOrder());
+                final String sortOrder = searchParameters.getSortOrder();
+                if (!"ASC".equalsIgnoreCase(sortOrder) && !"DESC".equalsIgnoreCase(sortOrder)) {
+                    throw new InputValidationException(String.format("invalid sortOrder value '%s'", sortOrder));
+                }
+                sqlStringBuilder.append(" ").append(sortOrder);
             }
         }
 
