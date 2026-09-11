@@ -25,13 +25,14 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 
 public enum NoteType {
 
-    CLIENT(100, "noteType.client", "clients", "Client note"), //
-    LOAN(200, "noteType.loan", "loans", "Loan note"), //
-    LOAN_TRANSACTION(300, "noteType.loan.transaction", "loanTransactions", "Loan transaction note"), //
-    SAVING_ACCOUNT(500, "noteType.saving", "savings", " account note"), //
-    GROUP(600, "noteType.group", "groups", "Group note"), //
-    SHARE_ACCOUNT(700, "noteType.shares", "accounts/share", "Share account note"), //
-    SAVINGS_TRANSACTION(800, "noteType.savings.transaction", "savingsTransactions", "Savings transaction note"), //
+    CLIENT(100, "noteType.client", "clients", "Client note", "CLIENTNOTE"), //
+    LOAN(200, "noteType.loan", "loans", "Loan note", "LOANNOTE"), //
+    LOAN_TRANSACTION(300, "noteType.loan.transaction", "loanTransactions", "Loan transaction note", "LOANTRANSACTIONNOTE"), //
+    SAVING_ACCOUNT(500, "noteType.saving", "savings", " account note", "SAVINGNOTE"), //
+    GROUP(600, "noteType.group", "groups", "Group note", "GROUPNOTE"), //
+    SHARE_ACCOUNT(700, "noteType.shares", "accounts/share", "Share account note", "SHAREACCOUNTNOTE"), //
+    SAVINGS_TRANSACTION(800, "noteType.savings.transaction", "savingsTransactions", "Savings transaction note",
+            "SAVINGSTRANSACTIONNOTE"), //
     ;
 
     public static final NoteType[] VALUES = values();
@@ -43,12 +44,14 @@ public enum NoteType {
     private final String code;
     private final String apiUrl;
     private final String description;
+    private final String permissionEntity;
 
-    NoteType(final Integer value, final String code, final String apiUrl, String description) {
+    NoteType(final Integer value, final String code, final String apiUrl, final String description, final String permissionEntity) {
         this.value = value;
         this.code = code;
         this.apiUrl = apiUrl;
         this.description = description;
+        this.permissionEntity = permissionEntity;
     }
 
     public Integer getValue() {
@@ -65,6 +68,10 @@ public enum NoteType {
 
     public String getDescription() {
         return description;
+    }
+
+    public String getPermissionEntity() {
+        return permissionEntity;
     }
 
     public static NoteType fromInt(int i) {

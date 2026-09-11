@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.command.core.CommandDispatcher;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.note.command.NoteCreateCommand;
 import org.apache.fineract.portfolio.note.command.NoteDeleteCommand;
 import org.apache.fineract.portfolio.note.command.NoteUpdateCommand;
@@ -58,8 +59,19 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class NotesApiResource {
 
+    private final PlatformSecurityContext context;
     private final NoteReadPlatformService readPlatformService;
     private final CommandDispatcher dispatcher;
+
+    private NoteType resolveNoteType(final String resourceType) {
+        final var noteType = NoteType.fromApiUrl(resourceType);
+
+        if (noteType == null) {
+            throw new NoteResourceNotSupportedException(resourceType);
+        }
+
+        return noteType;
+    }
 
     @GET
     @Operation(summary = "Retrieve a Resource's description", description = """
@@ -74,11 +86,8 @@ public class NotesApiResource {
             """)
     public List<NoteData> retrieveNotesByResource(@PathParam("resourceType") final String resourceType,
             @PathParam("resourceId") final Long resourceId) {
-        final var noteType = NoteType.fromApiUrl(resourceType);
-
-        if (noteType == null) {
-            throw new NoteResourceNotSupportedException(resourceType);
-        }
+        final var noteType = resolveNoteType(resourceType);
+        context.authenticatedUser().validateHasReadPermission(noteType.getPermissionEntity());
 
         return readPlatformService.retrieveNotesByResource(resourceId, noteType.getValue());
     }
@@ -97,11 +106,8 @@ public class NotesApiResource {
             """)
     public NoteData retrieveNote(@PathParam("resourceType") final String resourceType, @PathParam("resourceId") final Long resourceId,
             @PathParam("noteId") final Long noteId) {
-        final NoteType noteType = NoteType.fromApiUrl(resourceType);
-
-        if (noteType == null) {
-            throw new NoteResourceNotSupportedException(resourceType);
-        }
+        final var noteType = resolveNoteType(resourceType);
+        context.authenticatedUser().validateHasReadPermission(noteType.getPermissionEntity());
 
         return readPlatformService.retrieveNote(noteId, resourceId, noteType.getValue());
     }
@@ -118,11 +124,8 @@ public class NotesApiResource {
             """)
     public NoteCreateResponse addNewNote(@PathParam("resourceType") final String resourceType,
             @PathParam("resourceId") final Long resourceId, @Valid final NoteCreateRequest request) {
-        final var type = NoteType.fromApiUrl(resourceType);
-
-        if (type == null) {
-            throw new NoteResourceNotSupportedException(resourceType);
-        }
+        final var type = resolveNoteType(resourceType);
+        context.authenticatedUser().validateHasCreatePermission(type.getPermissionEntity());
 
         request.setResourceId(resourceId);
         request.setType(type);
@@ -145,11 +148,8 @@ public class NotesApiResource {
     public NoteUpdateResponse updateNote(@PathParam("resourceType") final String resourceType,
             @PathParam("resourceId") final Long resourceId, @PathParam("noteId") final Long noteId,
             @Valid final NoteUpdateRequest request) {
-        final var type = NoteType.fromApiUrl(resourceType);
-
-        if (type == null) {
-            throw new NoteResourceNotSupportedException(resourceType);
-        }
+        final var type = resolveNoteType(resourceType);
+        context.authenticatedUser().validateHasUpdatePermission(type.getPermissionEntity());
 
         request.setId(noteId);
         request.setResourceId(resourceId);
@@ -171,11 +171,8 @@ public class NotesApiResource {
             """)
     public NoteDeleteResponse deleteNote(@PathParam("resourceType") final String resourceType,
             @PathParam("resourceId") final Long resourceId, @PathParam("noteId") final Long noteId) {
-        final var type = NoteType.fromApiUrl(resourceType);
-
-        if (type == null) {
-            throw new NoteResourceNotSupportedException(resourceType);
-        }
+        final var type = resolveNoteType(resourceType);
+        context.authenticatedUser().validateHasDeletePermission(type.getPermissionEntity());
 
         var request = NoteDeleteRequest.builder().id(noteId).resourceId(resourceId).type(type).build();
 
