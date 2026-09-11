@@ -23,10 +23,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.Page;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
@@ -46,6 +50,11 @@ public class ShareAccountDividendReadPlatformServiceImpl implements ShareAccount
     private final ColumnValidator columnValidator;
     private final PaginationHelper paginationHelper;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
+
+    private static final Map<String, String> ORDER_BY_COLUMNS = Map.of("id", "sadd.id", "amount", "sadd.amount", "status",
+            "sadd.status", "savingsTransactionId", "sadd.savings_transaction_id", "accountId", "sa.id", "accountNumber",
+            "sa.account_no", "clientId", "mc.id", "clientName", "mc.display_name");
+    private static final Set<String> SORT_ORDER_VALUES = Set.of("ASC", "DESC");
 
     @Override
     public List<Map<String, Object>> retriveDividendDetailsForPostDividents() {
@@ -75,13 +84,10 @@ public class ShareAccountDividendReadPlatformServiceImpl implements ShareAccount
             params.add(searchParameters.getAccountNo());
         }
         if (searchParameters.hasOrderBy()) {
-            sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-            this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+            sqlBuilder.append(" order by ").append(resolveOrderByColumn(searchParameters.getOrderBy()));
 
             if (searchParameters.hasSortOrder()) {
-                sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
-
+                sqlBuilder.append(' ').append(resolveSortOrder(searchParameters.getSortOrder()));
             }
         }
 
@@ -96,6 +102,32 @@ public class ShareAccountDividendReadPlatformServiceImpl implements ShareAccount
 
         Object[] paramsObj = params.toArray();
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), paramsObj, shareAccountDividendMapper);
+    }
+
+    private static String resolveOrderByColumn(final String orderBy) {
+        final String column = ORDER_BY_COLUMNS.get(orderBy.trim());
+        if (column == null) {
+            throw unsupportedValue("orderBy", orderBy, ORDER_BY_COLUMNS.keySet());
+        }
+        return column;
+    }
+
+    private static String resolveSortOrder(final String sortOrder) {
+        final String normalized = sortOrder.trim().toUpperCase(Locale.ROOT);
+        if (!SORT_ORDER_VALUES.contains(normalized)) {
+            throw unsupportedValue("sortOrder", sortOrder, SORT_ORDER_VALUES);
+        }
+        return normalized;
+    }
+
+    private static PlatformApiDataValidationException unsupportedValue(final String parameterName, final String value,
+            final Set<String> supportedValues) {
+        final String defaultUserMessage = "The " + parameterName + " value '" + value + "' is not supported. The supported "
+                + parameterName + " values are " + supportedValues;
+        final ApiParameterError error = ApiParameterError.parameterError(
+                "validation.msg.sharedividend." + parameterName + ".value.is.not.supported", defaultUserMessage, parameterName, value,
+                supportedValues.toString());
+        return new PlatformApiDataValidationException(List.of(error));
     }
 
     private static final class ShareAccountDividendMapper implements RowMapper<ShareAccountDividendData> {
