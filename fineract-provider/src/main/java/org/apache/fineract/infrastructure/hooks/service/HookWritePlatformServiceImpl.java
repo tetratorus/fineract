@@ -243,6 +243,8 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
                     service.sendEmptyRequest().execute();
                 } catch (IOException re) {
                     baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.invalid");
+                } catch (IllegalArgumentException re) {
+                    baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.not.allowed");
                 }
             }
         }
