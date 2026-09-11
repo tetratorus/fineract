@@ -35,12 +35,18 @@ import org.springframework.transaction.annotation.Transactional;
 class StaffImageIdAdapter implements EntityImageIdAdapter {
 
     private static final String ENTITY_TYPE = "staff";
+    private static final String PERMISSION_ENTITY = "STAFFIMAGE";
 
     private final StaffRepository repository;
 
     @Override
     public boolean accept(String entityType) {
         return ENTITY_TYPE.equalsIgnoreCase(entityType);
+    }
+
+    @Override
+    public String permissionEntity() {
+        return PERMISSION_ENTITY;
     }
 
     @Override
