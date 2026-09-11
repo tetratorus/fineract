@@ -34,6 +34,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.domain.TenantOidcConfig;
 import org.apache.fineract.infrastructure.core.exception.ResourceNotFoundException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
@@ -50,8 +52,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * All endpoints require the {@code MANAGE_TENANT_OIDC_CONFIG} permission (Super Admin only) and may only operate on the
- * caller's own tenant: the {@code tenantId} path parameter must match the tenant the request was authenticated in. The
- * {@code clientSecret} is accepted on write operations but is never returned in responses.
+ * caller's own tenant: the {@code tenantId} path parameter must match the tenant the request was authenticated in,
+ * unless the caller is authenticated in the tenant configured as
+ * {@code fineract.security.oidc-federation.platform-admin-tenant}. The {@code clientSecret} is accepted on write
+ * operations but is never returned in responses.
  */
 @Path("/v1/tenants/{tenantId}/oidc-config")
 @Component
@@ -66,6 +70,7 @@ public class TenantOidcConfigApiResource {
     private final PlatformSecurityContext context;
     private final TenantOidcConfigService tenantOidcConfigService;
     private final ToApiJsonSerializer<TenantOidcConfigData> apiJsonSerializer;
+    private final FineractProperties fineractProperties;
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
@@ -130,7 +135,13 @@ public class TenantOidcConfigApiResource {
         context.authenticatedUser().validateHasPermissionTo(PERMISSION);
 
         var tenant = ThreadLocalContextUtil.getTenant();
-        if (tenant == null || tenantId == null || !tenantId.equals(tenant.getTenantIdentifier())) {
+        if (tenant == null || tenantId == null) {
+            throw new NoAuthorizationException("User is not authorised to manage OIDC configuration for tenant: " + tenantId);
+        }
+        String callerTenant = tenant.getTenantIdentifier();
+        String platformAdminTenant = fineractProperties.getSecurity().getOidcFederation().getPlatformAdminTenant();
+        boolean isPlatformAdmin = StringUtils.isNotBlank(platformAdminTenant) && platformAdminTenant.equals(callerTenant);
+        if (!tenantId.equals(callerTenant) && !isPlatformAdmin) {
             throw new NoAuthorizationException("User is not authorised to manage OIDC configuration for tenant: " + tenantId);
         }
     }

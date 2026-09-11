@@ -155,9 +155,18 @@ Each Fineract tenant can be independently linked to a different IdP. The configu
 
 All endpoints require the `MANAGE_TENANT_OIDC_CONFIG` permission (Super Admin only). The `clientSecret` is accepted on write operations but is **never** returned in responses — it is stored AES-256-GCM encrypted.
 
+The `{tenantId}` path parameter must match the tenant the caller is authenticated in (`Fineract-Platform-TenantId`). Managing *another* tenant's configuration is only permitted from a dedicated platform-admin tenant, which must be opted in explicitly:
+
+[source,properties]
+----
+fineract.security.oidc-federation.platform-admin-tenant=default
+----
+
+When this property is blank (the default), every tenant can only manage its own OIDC configuration and cross-tenant requests are rejected with HTTP 403.
+
 === Multi-Tenant Setup Example
 
-The following example configures three tenants, each using a different IdP, against a running Fineract instance. All calls use Basic Auth from the admin tenant (`default`).
+The following example configures three tenants, each using a different IdP, against a running Fineract instance. All calls use Basic Auth from the admin tenant (`default`), which requires `fineract.security.oidc-federation.platform-admin-tenant=default` to be set.
 
 ==== Tenant A — Keycloak
 
@@ -722,4 +731,4 @@ The token does not include the configured `tenant-claim-name` claim, the `Finera
 Ensure `fineract-provider` is on the classpath. The shared `FineractCorsConfiguration` bean lives there.
 
 *OIDC Config API returns 403*::
-The authenticated user does not have the `MANAGE_TENANT_OIDC_CONFIG` permission. Assign this permission to the Super Admin role.
+Either the authenticated user does not have the `MANAGE_TENANT_OIDC_CONFIG` permission (assign it to the Super Admin role), or the `{tenantId}` in the path differs from the caller's tenant. Cross-tenant management requires `fineract.security.oidc-federation.platform-admin-tenant` to be set to the caller's tenant.
