@@ -90,6 +90,9 @@ public class ReadReportingServiceImpl implements ReadReportingService {
 
     /** A plain integer with no leading zeros, so identifiers like {@code 000123} stay strings. */
     private static final Pattern UNTYPED_INTEGER = Pattern.compile("-?(0|[1-9]\\d*)");
+    private static final Pattern DISPLAY_LITERAL_NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
+    private static final Pattern DISPLAY_LITERAL_INTEGER = Pattern.compile("-?\\d+");
+    private static final Pattern DISPLAY_LITERAL_DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private final JdbcTemplate jdbcTemplate;
     private final PlatformSecurityContext context;
@@ -259,8 +262,13 @@ public class ReadReportingServiceImpl implements ReadReportingService {
                     throw new InputValidationException("Parameter '%s' of type '%s' cannot be used in display-literal position"
                             .formatted(paramName, formatType != null ? formatType : "unregistered"));
                 }
+                final String value = entry.getValue();
+                if (!isValidDisplayLiteral(value, formatType)) {
+                    throw new InputValidationException(
+                            "Parameter '%s' value is not a valid %s".formatted(paramName, formatType.toLowerCase(Locale.ROOT)));
+                }
                 // Substitute as string literal — preserves varchar return type
-                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(entry.getValue()) + "'$1");
+                sql = sql.replaceAll(displayPattern, "'" + Matcher.quoteReplacement(value) + "'$1");
             }
         }
 
@@ -280,6 +288,22 @@ public class ReadReportingServiceImpl implements ReadReportingService {
         }
 
         return buildPreparedQuery(name, normalisedParams, sql, paramFormatTypes);
+    }
+
+    private static boolean isValidDisplayLiteral(final String value, final String formatType) {
+        if (value == null) {
+            return false;
+        }
+        if ("number".equalsIgnoreCase(formatType)) {
+            return DISPLAY_LITERAL_NUMBER.matcher(value).matches();
+        }
+        if ("integer".equalsIgnoreCase(formatType)) {
+            return DISPLAY_LITERAL_INTEGER.matcher(value).matches();
+        }
+        if ("date".equalsIgnoreCase(formatType)) {
+            return DISPLAY_LITERAL_DATE.matcher(value).matches();
+        }
+        return false;
     }
 
     private String getSql(final String name, final String type) {
