@@ -91,6 +91,7 @@ public class SmsApiResource {
     @Operation(summary = "Retrieve a SMS message", operationId = "retrieveOneSms")
     @AlternativeOperationId("retrieveOne_6")
     public SmsData retrieveOne(@PathParam("resourceId") final Long resourceId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
         return readPlatformService.retrieveOne(resourceId);
     }
 
