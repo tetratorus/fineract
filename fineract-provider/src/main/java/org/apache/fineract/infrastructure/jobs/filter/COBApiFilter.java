@@ -27,6 +27,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.ApiGlobalErrorResponse;
 import org.apache.fineract.infrastructure.core.http.BodyCachingHttpServletRequestWrapper;
+import org.apache.fineract.infrastructure.core.http.RequestBodyTooLargeException;
 import org.apache.fineract.infrastructure.jobs.exception.LoanIdsHardLockedException;
 import org.apache.fineract.useradministration.exception.UnAuthenticatedUserException;
 import org.apache.http.HttpStatus;
@@ -62,8 +63,13 @@ public abstract class COBApiFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        BodyCachingHttpServletRequestWrapper cachingRequest = request instanceof BodyCachingHttpServletRequestWrapper wrapper ? wrapper
-                : new BodyCachingHttpServletRequestWrapper(request);
+        BodyCachingHttpServletRequestWrapper cachingRequest;
+        try {
+            cachingRequest = BodyCachingHttpServletRequestWrapper.wrap(request, BodyCachingHttpServletRequestWrapper.DEFAULT_MAX_BODY_SIZE);
+        } catch (RequestBodyTooLargeException e) {
+            e.toServletResponse(response);
+            return;
+        }
 
         if (!helper.isOnApiList(cachingRequest)) {
             proceed(filterChain, cachingRequest, response);

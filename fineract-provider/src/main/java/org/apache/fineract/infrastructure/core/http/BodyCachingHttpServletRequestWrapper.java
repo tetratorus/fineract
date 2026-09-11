@@ -26,19 +26,47 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
 public final class BodyCachingHttpServletRequestWrapper extends HttpServletRequestWrapper {
 
+    public static final long DEFAULT_MAX_BODY_SIZE = 10L * 1024 * 1024;
+
     private final byte[] cachedBody;
     private ByteArrayInputStream inputStream;
 
-    public BodyCachingHttpServletRequestWrapper(HttpServletRequest request) throws IOException {
+    public BodyCachingHttpServletRequestWrapper(HttpServletRequest request, long maxBodySize) throws IOException {
         super(request);
-        this.cachedBody = request.getInputStream().readAllBytes();
+        this.cachedBody = readBounded(request, maxBodySize);
         this.inputStream = new ByteArrayInputStream(cachedBody);
+    }
+
+    public static BodyCachingHttpServletRequestWrapper wrap(HttpServletRequest request, long maxBodySize) throws IOException {
+        return request instanceof BodyCachingHttpServletRequestWrapper wrapper ? wrapper
+                : new BodyCachingHttpServletRequestWrapper(request, maxBodySize);
+    }
+
+    private static byte[] readBounded(HttpServletRequest request, long maxBodySize) throws IOException {
+        long declaredLength = request.getContentLengthLong();
+        if (declaredLength > maxBodySize) {
+            throw new RequestBodyTooLargeException(maxBodySize);
+        }
+        InputStream in = request.getInputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream(declaredLength > 0 ? (int) Math.min(declaredLength, 1 << 20) : 1024);
+        byte[] buffer = new byte[8192];
+        long total = 0;
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+            total += read;
+            if (total > maxBodySize) {
+                throw new RequestBodyTooLargeException(maxBodySize);
+            }
+            out.write(buffer, 0, read);
+        }
+        return out.toByteArray();
     }
 
     @Override

@@ -25,7 +25,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.http.BodyCachingHttpServletRequestWrapper;
+import org.apache.fineract.infrastructure.core.http.RequestBodyTooLargeException;
 import org.apache.fineract.portfolio.workingcapitalloan.service.WorkingCapitalLoanModelProcessingService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -45,11 +47,17 @@ public class WorkingCapitalLoanModelCheckerFilter extends OncePerRequestFilter {
 
     private final WorkingCapitalLoanModelProcessingService modelProcessingService;
     private final WorkingCapitalLoanModelCheckerHelper helper;
+    private final FineractProperties fineractProperties;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, final FilterChain filterChain)
             throws ServletException, IOException {
-        request = new BodyCachingHttpServletRequestWrapper(request);
+        try {
+            request = BodyCachingHttpServletRequestWrapper.wrap(request, fineractProperties.getApi().getMaxRequestBodySize().toBytes());
+        } catch (RequestBodyTooLargeException e) {
+            e.toServletResponse(response);
+            return;
+        }
 
         if (helper.isOnApiList((BodyCachingHttpServletRequestWrapper) request)) {
             final List<Long> loanIds = helper.calculateRelevantLoanIds((BodyCachingHttpServletRequestWrapper) request);
