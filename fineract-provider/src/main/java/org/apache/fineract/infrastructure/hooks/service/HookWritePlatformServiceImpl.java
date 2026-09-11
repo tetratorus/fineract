@@ -59,6 +59,8 @@ import org.apache.fineract.infrastructure.hooks.exception.HookNotFoundException;
 import org.apache.fineract.infrastructure.hooks.exception.HookTemplateNotFoundException;
 import org.apache.fineract.infrastructure.hooks.mapper.HookEventMapper;
 import org.apache.fineract.infrastructure.hooks.processor.ProcessorHelper;
+import org.apache.fineract.infrastructure.hooks.processor.WebHookUrlNotAllowedException;
+import org.apache.fineract.infrastructure.hooks.processor.WebHookUrlValidator;
 import org.apache.fineract.template.domain.Template;
 import org.apache.fineract.template.domain.TemplateRepository;
 import org.apache.fineract.template.exception.TemplateNotFoundException;
@@ -79,6 +81,7 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
     private final HookTemplateRepository hookTemplateRepository;
     private final TemplateRepository ugdTemplateRepository;
     private final ProcessorHelper processorHelper;
+    private final WebHookUrlValidator webHookUrlValidator;
     private final HookEventMapper hookEventMapper;
 
     @Transactional
@@ -158,6 +161,7 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
 
                 hook.setConfig(assembleConfig(request.getConfig(), hook.getTemplate()));
                 hook.getConfig().forEach(hookConfiguration -> hookConfiguration.setHook(hook));
+                validatePayloadUrls(hook.getConfig());
             }
 
             if (!changes.isEmpty()) {
@@ -220,6 +224,14 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
         return configuration;
     }
 
+    private void validatePayloadUrls(final Set<HookConfiguration> config) {
+        for (final HookConfiguration conf : config) {
+            if (conf.getFieldName().equals(payloadURLName)) {
+                webHookUrlValidator.validate(conf.getFieldValue());
+            }
+        }
+    }
+
     private void validateHookRules(final HookTemplate template, final Set<HookConfiguration> config, Set<HookResource> events) {
 
         final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
@@ -241,6 +253,8 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
                 try {
                     var service = processorHelper.createWebHookService(fieldValue);
                     service.sendEmptyRequest().execute();
+                } catch (WebHookUrlNotAllowedException e) {
+                    baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.not.allowed");
                 } catch (IOException re) {
                     baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.invalid");
                 }
