@@ -57,6 +57,7 @@ import org.apache.fineract.infrastructure.hooks.domain.HookTemplate;
 import org.apache.fineract.infrastructure.hooks.domain.HookTemplateRepository;
 import org.apache.fineract.infrastructure.hooks.exception.HookNotFoundException;
 import org.apache.fineract.infrastructure.hooks.exception.HookTemplateNotFoundException;
+import org.apache.fineract.infrastructure.hooks.exception.HookUrlForbiddenException;
 import org.apache.fineract.infrastructure.hooks.mapper.HookEventMapper;
 import org.apache.fineract.infrastructure.hooks.processor.ProcessorHelper;
 import org.apache.fineract.template.domain.Template;
@@ -243,6 +244,8 @@ public class HookWritePlatformServiceImpl implements HookWritePlatformService {
                     service.sendEmptyRequest().execute();
                 } catch (IOException re) {
                     baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.invalid");
+                } catch (HookUrlForbiddenException e) {
+                    baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("url.forbidden");
                 }
             }
         }

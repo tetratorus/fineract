@@ -73,6 +73,7 @@ public class FineractProperties {
     private FineractJobProperties job;
 
     private FineractTemplateProperties template;
+    private FineractHooksProperties hooks;
     private FineractJpaProperties jpa;
 
     private FineractDatabaseProperties database;
@@ -446,6 +447,14 @@ public class FineractProperties {
     @Getter
     @Setter
     public static class FineractTemplateProperties {
+
+        private boolean regexWhitelistEnabled;
+        private List<String> regexWhitelist;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractHooksProperties {
 
         private boolean regexWhitelistEnabled;
         private List<String> regexWhitelist;

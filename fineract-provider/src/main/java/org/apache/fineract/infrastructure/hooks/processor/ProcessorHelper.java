@@ -18,16 +18,23 @@
  */
 package org.apache.fineract.infrastructure.hooks.processor;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import okhttp3.OkHttpClient;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
+import org.apache.fineract.infrastructure.hooks.exception.HookUrlForbiddenException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -66,8 +73,10 @@ public final class ProcessorHelper {
      */
     private final boolean insecureHttpClient = Boolean.getBoolean("fineract.insecureHttpClient");
     private final SSLContext insecureSSLContext;
+    private final FineractProperties fineractProperties;
 
-    public ProcessorHelper() throws KeyManagementException, NoSuchAlgorithmException {
+    public ProcessorHelper(final FineractProperties fineractProperties) throws KeyManagementException, NoSuchAlgorithmException {
+        this.fineractProperties = fineractProperties;
         if (insecureHttpClient) {
             insecureSSLContext = createInsecureSSLContext();
         } else {
@@ -113,6 +122,7 @@ public final class ProcessorHelper {
     }
 
     public WebHookService createWebHookService(final String url) {
+        validateUrl(url);
         final OkHttpClient client = createClient();
         final Retrofit.Builder retrofitBuilder = new Retrofit.Builder();
         retrofitBuilder.baseUrl(url);
@@ -120,6 +130,43 @@ public final class ProcessorHelper {
         retrofitBuilder.addConverterFactory(GsonConverterFactory.create());
         final Retrofit retrofit = retrofitBuilder.build();
         return retrofit.create(WebHookService.class);
+    }
+
+    private void validateUrl(final String url) {
+        if (url == null) {
+            throw new HookUrlForbiddenException(url);
+        }
+        final URI uri;
+        try {
+            uri = new URI(url);
+        } catch (URISyntaxException e) {
+            throw new HookUrlForbiddenException(url, e);
+        }
+        final String scheme = uri.getScheme();
+        if (scheme == null || uri.getHost() == null) {
+            throw new HookUrlForbiddenException(url);
+        }
+        final String lowerScheme = scheme.toLowerCase(Locale.ROOT);
+        if (!"http".equals(lowerScheme) && !"https".equals(lowerScheme)) {
+            throw new HookUrlForbiddenException(url);
+        }
+        if (uri.getRawUserInfo() != null) {
+            throw new HookUrlForbiddenException(url);
+        }
+
+        final FineractProperties.FineractHooksProperties hooks = fineractProperties.getHooks();
+        if (hooks == null || !hooks.isRegexWhitelistEnabled()) {
+            return;
+        }
+        final List<String> whitelist = hooks.getRegexWhitelist();
+        if (whitelist != null) {
+            for (final String urlPattern : whitelist) {
+                if (Pattern.compile(urlPattern).matcher(url).matches()) {
+                    return;
+                }
+            }
+        }
+        throw new HookUrlForbiddenException(url);
     }
 
     @SuppressWarnings("rawtypes")
