@@ -173,6 +173,10 @@ public class SecurityConfig {
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_SAVINGNOTE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/groups/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_GROUPNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/accounts/share/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_SHAREACCOUNTNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/savingsTransactions/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_SAVINGSTRANSACTIONNOTE")
                     // notes: create
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/clients/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_CLIENTNOTE")
@@ -184,6 +188,10 @@ public class SecurityConfig {
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_SAVINGNOTE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/groups/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_GROUPNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/accounts/share/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_SHAREACCOUNTNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/savingsTransactions/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_SAVINGSTRANSACTIONNOTE")
                     // notes: update
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/clients/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_CLIENTNOTE")
@@ -195,6 +203,10 @@ public class SecurityConfig {
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_SAVINGNOTE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/groups/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_GROUPNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/accounts/share/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_SHAREACCOUNTNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/savingsTransactions/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_SAVINGSTRANSACTIONNOTE")
                     // notes: delete
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/clients/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_CLIENTNOTE")
@@ -206,6 +218,10 @@ public class SecurityConfig {
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_SAVINGNOTE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/groups/*/notes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_GROUPNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/accounts/share/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_SHAREACCOUNTNOTE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/savingsTransactions/*/notes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_SAVINGSTRANSACTIONNOTE")
                     // document: clients
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/clients/*/documents"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_DOCUMENT")
