@@ -31,12 +31,17 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.core.service.Page;
@@ -44,7 +49,6 @@ import org.apache.fineract.infrastructure.core.service.PaginationHelper;
 import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
-import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.account.data.AccountTransferData;
 import org.apache.fineract.portfolio.client.data.ClientData;
@@ -88,6 +92,16 @@ import org.springframework.jdbc.core.RowMapper;
 
 public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountReadPlatformService {
 
+    private static final Map<String, String> SUPPORTED_ORDER_BY_COLUMNS = Map.ofEntries(Map.entry("id", "sa.id"),
+            Map.entry("accountNo", "sa.account_no"), Map.entry("externalId", "sa.external_id"), Map.entry("clientId", "c.id"),
+            Map.entry("clientName", "c.display_name"), Map.entry("groupId", "g.id"), Map.entry("groupName", "g.display_name"),
+            Map.entry("productId", "sp.id"), Map.entry("productName", "sp.name"), Map.entry("fieldOfficerId", "s.id"),
+            Map.entry("fieldOfficerName", "s.display_name"), Map.entry("status", "sa.status_enum"),
+            Map.entry("submittedOnDate", "sa.submittedon_date"), Map.entry("approvedOnDate", "sa.approvedon_date"),
+            Map.entry("activatedOnDate", "sa.activatedon_date"), Map.entry("closedOnDate", "sa.closedon_date"),
+            Map.entry("currencyCode", "sa.currency_code"));
+    private static final Set<String> SUPPORTED_SORT_ORDER_VALUES = Set.of("ASC", "DESC");
+
     private final PlatformSecurityContext context;
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
@@ -103,15 +117,14 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
     // pagination
     private final PaginationHelper paginationHelper;
 
-    private final ColumnValidator columnValidator;
     private final SavingsAccountAssembler savingAccountAssembler;
 
     private final SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper;
     private final SavingsAccountTransactionRepository savingsAccountTransactionRepository;
 
     public SavingsAccountReadPlatformServiceImpl(final PlatformSecurityContext context, final JdbcTemplate jdbcTemplate,
-            final SavingsAccountAssembler savingAccountAssembler, PaginationHelper paginationHelper, ColumnValidator columnValidator,
-            DatabaseSpecificSQLGenerator sqlGenerator, SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
+            final SavingsAccountAssembler savingAccountAssembler, PaginationHelper paginationHelper, DatabaseSpecificSQLGenerator sqlGenerator,
+            SavingsAccountRepositoryWrapper savingsAccountRepositoryWrapper,
             SavingsAccountTransactionRepository savingsAccountTransactionRepository) {
         this.context = context;
         this.jdbcTemplate = jdbcTemplate;
@@ -122,7 +135,6 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         this.transactionsMapper = new SavingsAccountTransactionsMapper();
         this.savingsAccountTransactionsForBatchMapper = new SavingsAccountTransactionsForBatchMapper();
         this.savingAccountMapper = new SavingAccountMapper();
-        this.columnValidator = columnValidator;
         this.paginationHelper = paginationHelper;
         this.savingAccountMapperForInterestPosting = new SavingAccountMapperForInterestPosting();
         this.savingAccountAssembler = savingAccountAssembler;
@@ -193,12 +205,10 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                 objectArray[arrayPos++] = searchParameters.getOfficeId();
             }
             if (searchParameters.hasOrderBy()) {
-                sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
-                this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+                sqlBuilder.append(" order by ").append(resolveOrderByColumn(searchParameters.getOrderBy()));
 
                 if (searchParameters.hasSortOrder()) {
-                    sqlBuilder.append(' ').append(searchParameters.getSortOrder());
-                    this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getSortOrder());
+                    sqlBuilder.append(' ').append(resolveSortOrder(searchParameters.getSortOrder()));
                 }
             }
 
@@ -213,6 +223,30 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         }
         final Object[] finalObjectArray = Arrays.copyOf(objectArray, arrayPos);
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), finalObjectArray, this.savingAccountMapper);
+    }
+
+    private static String resolveOrderByColumn(final String orderBy) {
+        final String column = SUPPORTED_ORDER_BY_COLUMNS.get(orderBy.trim());
+        if (column == null) {
+            final ApiParameterError error = ApiParameterError.parameterError(
+                    "validation.msg.savingsaccount.orderBy.value.is.not.supported", "The orderBy value '" + orderBy
+                            + "' is not supported. The supported orderBy values are " + SUPPORTED_ORDER_BY_COLUMNS.keySet(),
+                    "orderBy", orderBy, SUPPORTED_ORDER_BY_COLUMNS.keySet().toString());
+            throw new PlatformApiDataValidationException(List.of(error));
+        }
+        return column;
+    }
+
+    private static String resolveSortOrder(final String sortOrder) {
+        final String normalized = sortOrder.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_SORT_ORDER_VALUES.contains(normalized)) {
+            final ApiParameterError error = ApiParameterError.parameterError(
+                    "validation.msg.savingsaccount.sortOrder.value.is.not.supported", "The sortOrder value '" + sortOrder
+                            + "' is not supported. The supported sortOrder values are " + SUPPORTED_SORT_ORDER_VALUES,
+                    "sortOrder", sortOrder, SUPPORTED_SORT_ORDER_VALUES.toString());
+            throw new PlatformApiDataValidationException(List.of(error));
+        }
+        return normalized;
     }
 
     @Override
