@@ -69,7 +69,7 @@ public class ProductMixWritePlatformServiceJpaRepositoryImpl implements ProductM
     @Override
     public ProductMixCreateResponse createProductMix(final ProductMixCreateRequest request) {
         try {
-            this.context.authenticatedUser();
+            this.context.authenticatedUser().validateHasPermissionTo("CREATE_PRODUCTMIX");
 
             final Long productId = request.getProductId();
             final List<Long> restrictedProducts = request.getRestrictedProducts();
@@ -100,7 +100,7 @@ public class ProductMixWritePlatformServiceJpaRepositoryImpl implements ProductM
     @Override
     public ProductMixUpdateResponse updateProductMix(final ProductMixUpdateRequest request) {
         try {
-            this.context.authenticatedUser();
+            this.context.authenticatedUser().validateHasPermissionTo("UPDATE_PRODUCTMIX");
 
             final Long productId = request.getProductId();
             final List<Long> restrictedProducts = request.getRestrictedProducts();
@@ -142,7 +142,7 @@ public class ProductMixWritePlatformServiceJpaRepositoryImpl implements ProductM
     @Override
     public ProductMixDeleteResponse deleteProductMix(final ProductMixDeleteRequest request) {
         try {
-            this.context.authenticatedUser();
+            this.context.authenticatedUser().validateHasPermissionTo("DELETE_PRODUCTMIX");
 
             final Long productId = request.getProductId();
             final Map<String, Object> changes = new LinkedHashMap<>();

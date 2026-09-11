@@ -325,6 +325,15 @@ public class SecurityConfig {
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_PAYMENTTYPE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/paymenttypes"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_PAYMENTTYPE")
+                    // product mix
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/loanproducts/*/productmix"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_PRODUCTMIX")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/loanproducts/*/productmix"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_PRODUCTMIX")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/loanproducts/*/productmix"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_PRODUCTMIX")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/loanproducts/*/productmix"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_PRODUCTMIX")
 
                     // working days
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/workingdays"))
