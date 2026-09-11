@@ -319,11 +319,15 @@ public class SecurityConfig {
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/import/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_IMPORT")
                     // payment type
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/paymenttypes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_PAYMENTTYPE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.GET, "/api/*/paymenttypes/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_READ, "READ_PAYMENTTYPE")
                     .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/paymenttypes"))
+                    .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "CREATE_PAYMENTTYPE")
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.PUT, "/api/*/paymenttypes/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "UPDATE_PAYMENTTYPE")
-                    .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/paymenttypes"))
+                    .requestMatchers(API_MATCHER.matcher(HttpMethod.DELETE, "/api/*/paymenttypes/*"))
                     .hasAnyAuthority(ALL_FUNCTIONS, ALL_FUNCTIONS_WRITE, "DELETE_PAYMENTTYPE")
 
                     // working days
